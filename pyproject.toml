@@ -1,0 +1,56 @@
+[build-system]
+requires = [
+  "setuptools>=42", 
+  "wheel", 
+  "setuptools_scm[toml]>=6.0.0"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isabelle_lsp_client"
+version = "0.0.1"
+description = "A Language Server Protocol client for Isabelle written in Python."
+readme = "README.rst"
+requires-python = ">=3.6"
+license = { file = "LICENSE" }
+
+authors = [
+    { name = "Christian Kissig" }
+]
+
+dependencies = [
+    "lsp_client"
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+urls = { "Homepage" = "https://github.com/christiankissig/python-isabelle-lsp-client" }
+
+[tool.setuptools]
+packages = ['isabelle_lsp_client']
+
+[tool.setuptools.package-data]
+isabelle_lsp_client = ['data/*']
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov"
+]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+testpaths = [
+    "tests"
+]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-timestamp"
+
+[tool.flake8]
+max-line-length = 120
+exclude = ".git,__pycache__,docs/source/conf.py,old,build,dist"
