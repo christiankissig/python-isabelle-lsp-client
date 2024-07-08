@@ -5,8 +5,8 @@ This repository contains an unofficial LSP client for Isabelle vscode\_server.
 The client is written to be used with Isabelle2023, guarantees of correctness
 are not provided. Use at your own risk.
 
-Contrary to 
-[https://github.com/inpefess/isabelle-client/tree/master](isabelle-client), the
+Contrary to `isabelle-client 
+<https://github.com/inpefess/isabelle-client/tree/master>`_, the
 client in this repository talks to Isabelle through the language server 
 protocol allowing for more granular interaction, such as retrieving the
 proof state in a specific part of the proof script. The language server
@@ -15,21 +15,21 @@ protocol is based on JSON-RPC.
 Requirements
 ============
 
-The client implementation requires the 
-[https://github.com/m-fleury/isabelle-emacs](emacs fork of Isabelle), which
+The client implementation requires the `emacs fork of Isabelle
+<https://github.com/m-fleury/isabelle-emacs>`_, which
 supports non-HTML output. The client implementation supports Isabelle2023 and
 Isabelle2024.
 
 Until lsp_client is available through PyPI, the client implementation requires
-a virtual Python environment with 
-[https://github.com/christiankissig/python-lsp-client](python-lsp-client) 
+a virtual Python environment with `python-lsp-client
+<https://github.com/christiankissig/python-lsp-client>`_
 manually installed:
 
-```bash
-source /path/to/venv/bin/activate
-cd python-lsp-client
-pip install .
-```
+::
+
+  source /path/to/venv/bin/activate
+  cd python-lsp-client
+  pip install .
 
 How to use
 ==========
