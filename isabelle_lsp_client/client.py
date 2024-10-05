@@ -2,12 +2,16 @@
 Language Server Protocol client implementation for Isabelle.
 """
 
-
 import json
 import os
 import urllib.parse
 
-from lsp_client import STDIOLSPClient, InitializeRequest, OpenTextDocumentRequest
+from lsp_client import (
+    STDIOLSPClient,
+    InitializeRequest,
+    TextDocument_DidOpen_Request,
+    TextDocumentItem
+)
 from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
 from uuid import uuid4
 
@@ -17,6 +21,7 @@ class IsabelleLSPClient(STDIOLSPClient):
     A Language Server Protocol client for Isabelle.
     """
 
+    LANGUAGE_ID = "isabelle"
     ENCODING = "utf-8"
 
     def __init__(
@@ -61,7 +66,8 @@ class IsabelleLSPClient(STDIOLSPClient):
         if not text:
             with open(file_path, "r") as file:
                 text = file.read()
-        self.send_request(OpenTextDocumentRequest(uri, text))
+        text_document_item = TextDocumentItem(uri, self.LANGUAGE_ID, 0, text)
+        self.send_request(TextDocument_DidOpen_Request(text_document_item))
 
     def caret_update(self, uri: str, line: int, character: int):
         self.send_request(CaretUpdateRequest(uri, line, character))

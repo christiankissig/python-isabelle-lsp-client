@@ -16,6 +16,7 @@ setup(
     ],
     python_requires='>=3.6',
     install_requires=[
+        "pydantic>=2.9.0",
     ],
     extras_require={
         'dev': ['flake8'],
