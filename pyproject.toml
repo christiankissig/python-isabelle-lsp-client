@@ -19,6 +19,7 @@ authors = [
 ]
 
 dependencies = [
+    "pydantic>=2.9.0",
     "lsp_client"
 ]
 
