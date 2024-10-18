@@ -25,6 +25,11 @@ setup(
     author="Christian Kissig",
     url="https://github.com/christiankissig/python-isabelle-lsp-client",
     packages=find_packages(),
+    package_data={
+        "isabelle_lsp_client": [
+            "data/capabilities.json",
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
