@@ -1,5 +1,7 @@
-from .client import IsabelleLSPClient
+from .client import IsabelleClient
+from .version import version as __version__
 
 __all__ = [
-        "IsabelleLSPClient"
+        "__version__",
+        "IsabelleClient",
 ]

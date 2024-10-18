@@ -6,8 +6,10 @@ import json
 import os
 import urllib.parse
 
+from .version import version
+
 from lsp_client import (
-    STDIOLSPClient,
+    LSPClient,
     InitializeRequest,
     TextDocument_DidOpen_Request,
     TextDocumentItem
@@ -16,7 +18,7 @@ from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
 from uuid import uuid4
 
 
-class IsabelleLSPClient(STDIOLSPClient):
+class IsabelleClient(object):
     """
     A Language Server Protocol client for Isabelle.
     """
@@ -24,27 +26,25 @@ class IsabelleLSPClient(STDIOLSPClient):
     LANGUAGE_ID = "isabelle"
     ENCODING = "utf-8"
 
-    def __init__(
-        self,
-        executable: str,
-        server_args: list[str] = [],
-        callbacks: dict[str, callable] = {}
-    ):
-        server_args = ["vscode_server"] + server_args
-        super().__init__(executable, server_args, callbacks)
+    lspClient: LSPClient
+
+    def __init__(self, lspClient):
+        self.lspClient = lspClient
 
     def _get_capabilities(self):
-        with open("data/capabilities.json", "r") as file:
+        with open(
+                "/home/christian/workspace/python-isabelle-lsp-cli/data/capabilities.json",
+                "r") as file:
             text = file.read()
         return json.loads(text)
 
     def _get_client_info(self):
         return {
             "name": "python-isabelle-lsp-client",
-            "version": "0.1.0"
+            "version": version,
         }
 
-    def initialize(self, params={}, clientCapabilities=None):
+    async def initialize(self, params={}, clientCapabilities=None):
         workDoneToken = str(uuid4())
         if clientCapabilities is None:
             params["capabilities"] = self._get_capabilities()
@@ -55,10 +55,10 @@ class IsabelleLSPClient(STDIOLSPClient):
         params["clientInfo"] = self._get_client_info()
         params["locale"] = "en_US"
         params["processId"] = os.getpid()
-        self.send_request(InitializeRequest(os.getpid(), params))
+        await self.lspClient.send_request(InitializeRequest(params=params))
         return workDoneToken
 
-    def open_text_document(self, uri: str, text=None):
+    async def open_text_document(self, uri: str, text=None):
         parsed_uri = urllib.parse.urlparse(uri)
         if parsed_uri.scheme != 'file':
             raise ValueError(f"Invalid URI scheme: {parsed_uri.scheme}, expected 'file'")
@@ -66,11 +66,17 @@ class IsabelleLSPClient(STDIOLSPClient):
         if not text:
             with open(file_path, "r") as file:
                 text = file.read()
-        text_document_item = TextDocumentItem(uri, self.LANGUAGE_ID, 0, text)
-        self.send_request(TextDocument_DidOpen_Request(text_document_item))
+        text_document_item = TextDocumentItem(
+                uri=uri,
+                languageId=self.LANGUAGE_ID,
+                version=0,
+                text=text)
+        didopen_request = TextDocument_DidOpen_Request(
+                params={"textDocument": text_document_item})
+        await self.lspClient.send_request(didopen_request)
 
-    def caret_update(self, uri: str, line: int, character: int):
-        self.send_request(CaretUpdateRequest(uri, line, character))
+    async def caret_update(self, uri: str, line: int, character: int):
+        await self.lspClient.send_request(CaretUpdateRequest(uri, line, character))
 
-    def progress_request(self):
-        self.send_request(ProgressRequest())
+    async def progress_request(self):
+        await self.lspClient.send_request(ProgressRequest())
