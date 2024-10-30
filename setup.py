@@ -26,8 +26,8 @@ setup(
     url="https://github.com/christiankissig/python-isabelle-lsp-client",
     packages=find_packages(),
     package_data={
-        "isabelle_lsp_client": [
-            "data/capabilities.json",
+        "": [
+            "data/*.json",
         ],
     },
     classifiers=[

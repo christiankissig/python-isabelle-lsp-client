@@ -3,8 +3,11 @@ Language Server Protocol client implementation for Isabelle.
 """
 
 import json
+import logging
 import os
 import urllib.parse
+
+from importlib import resources
 
 from .version import version
 
@@ -16,6 +19,9 @@ from lsp_client import (
 )
 from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
 from uuid import uuid4
+
+
+logger = logging.getLogger(__name__)
 
 
 class IsabelleClient(object):
@@ -32,9 +38,8 @@ class IsabelleClient(object):
         self.lspClient = lspClient
 
     def _get_capabilities(self):
-        with open(
-                "/home/christian/workspace/python-isabelle-lsp-cli/data/capabilities.json",
-                "r") as file:
+        capabilities_file = resources.files("isabelle_lsp_client.data") / "capabilities.json"
+        with capabilities_file.open('r') as file:
             text = file.read()
         return json.loads(text)
 
@@ -76,6 +81,7 @@ class IsabelleClient(object):
         await self.lspClient.send_request(didopen_request)
 
     async def caret_update(self, uri: str, line: int, character: int):
+        logger.info(f"Sending caret update request: {uri}, {line}, {character}")
         await self.lspClient.send_request(CaretUpdateRequest(uri, line, character))
 
     async def progress_request(self):
