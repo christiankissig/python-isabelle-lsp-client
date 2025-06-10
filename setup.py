@@ -37,8 +37,8 @@ setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-        "pydantic>=2.9.0",
         "lsp_client>=0.0.2",
+        "pydantic>=2.9.0",
     ],
     extras_require=extras_require,
     entry_points={
