@@ -13,8 +13,9 @@ import os
 import re
 import sys
 
-from lsp_client import ContentChange
-from isabelle_lsp_client import IsabelleProcess, ClientHandler
+from lsp_client import ContentChange, Position, Range
+
+from isabelle_lsp_client import ClientHandler, Document, IsabelleProcess
 
 # configure to correct location of isabelle-emacs Isabelle executable
 ISABELLE_EXEC = os.getenv("ISABELLE_EXEC")
@@ -22,10 +23,10 @@ ISABELLE_EXEC = os.getenv("ISABELLE_EXEC")
 COMMAND = "sledgehammer"
 WORKING = "Sledgehammering..."
 FAILED = "Sledgehammer failed to find a command."
-PATTERN = re.compile(r'Try this: (.*?) \([\.0-9]+ m?s\)')
+PATTERN = re.compile(r"Try this: (.*?) \([\.0-9]+ m?s\)")
 
 
-async def on_update_dynamic_output(document, response):
+async def on_update_dynamic_output(document: Document, response: dict) -> None:
     """
     Handle PIDE/dynamic_output response:
 
@@ -38,33 +39,39 @@ async def on_update_dynamic_output(document, response):
         return
 
     line = document.lines[document.caret_position[0]]
-    if not line[document.caret_position[1] - len(COMMAND):].startswith(COMMAND):
+    if not line[document.caret_position[1] - len(COMMAND) :].startswith(COMMAND):
         return
 
     command = _get_command_from_sledgehammer(content)
     if command:
         content_change = ContentChange(
-            start_line=document.caret_position[0],
-            start_character=document.caret_position[1] - len(COMMAND),
-            end_line=document.caret_position[0],
-            end_character=document.caret_position[1],
+            range=Range(
+                start=Position(
+                    line=document.caret_position[0],
+                    character=document.caret_position[1] - len(COMMAND),
+                ),
+                end=Position(
+                    line=document.caret_position[0],
+                    character=document.caret_position[1],
+                ),
+            ),
             text=command,
-            range_length=len(COMMAND)
+            rangeLength=len(COMMAND),
         )
-        document.apply_changes([content_change])
+        await document.apply_changes([content_change])
         document.write_file()
 
     await _move_caret_to_next_sledgehammer(document)
 
 
-async def on_start(document):
+async def on_start(document: Document) -> None:
     """
     Load document on start.
     """
     await _move_caret_to_next_sledgehammer(document)
 
 
-async def _move_caret_to_next_sledgehammer(document):
+async def _move_caret_to_next_sledgehammer(document: Document) -> None:
     """
     Move caret to next `sledgehammer`.
     """
@@ -84,7 +91,7 @@ def _get_command_from_sledgehammer(content: str) -> str | None:
     return None
 
 
-async def _run(clientHandler, args):
+async def _run(clientHandler: ClientHandler, args: dict) -> None:
     """
     Create a new Isabelle process, and run with arguments.
     """
@@ -92,17 +99,17 @@ async def _run(clientHandler, args):
     await process.run(args)
 
 
-def _main(argv):
+def _main(argv: list[str]) -> None:
     args = {
-        'theory': argv[1],
-        'exec': ISABELLE_EXEC,
+        "theory": argv[1],
+        "exec": ISABELLE_EXEC,
     }
 
     clientHandler = ClientHandler()
     clientHandler.register_on_start(on_start)
     clientHandler.register_on_dynamic_output(on_update_dynamic_output)
 
-    asyncio.run(_run(clientHandler,args))
+    asyncio.run(_run(clientHandler, args))
 
 
 if __name__ == "__main__":
