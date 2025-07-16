@@ -2,7 +2,7 @@ import logging
 
 from lsp_client import ContentChange, TextDocument_DidChange_Request
 
-from isabelle_lsp_client import IsabelleClient
+from .client import IsabelleClient
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,4 @@
-from isabelle_lsp_client.protocol import (
-    CaretUpdateRequest,
-    ProgressRequest,
-)
+from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
 
 
 def test_caret_update_request():

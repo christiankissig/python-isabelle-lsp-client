@@ -15,7 +15,12 @@ import sys
 
 from lsp_client import ContentChange, Position, Range
 
-from isabelle_lsp_client import ClientHandler, Document, IsabelleProcess
+from isabelle_lsp_client import (
+    PIDE_DYNAMIC_OUTPUT,
+    ClientHandler,
+    Document,
+    IsabelleProcess,
+)
 
 # configure to correct location of isabelle-emacs Isabelle executable
 ISABELLE_EXEC = os.getenv("ISABELLE_EXEC")
@@ -107,7 +112,7 @@ def _main(argv: list[str]) -> None:
 
     clientHandler = ClientHandler()
     clientHandler.register_on_start(on_start)
-    clientHandler.register_on_dynamic_output(on_update_dynamic_output)
+    clientHandler.register(PIDE_DYNAMIC_OUTPUT, on_update_dynamic_output)
 
     asyncio.run(_run(clientHandler, args))
 
