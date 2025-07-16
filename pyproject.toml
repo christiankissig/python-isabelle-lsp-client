@@ -2,71 +2,55 @@
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "isabelle_lsp_client"
 version = "0.0.1"
 description = "A Language Server Protocol client for Isabelle written in Python."
 readme = "README.rst"
-requires-python = ">=3.10"
-license = { file = "LICENSE" }
-authors = [
-  { name = "Christian Kissig" }
-]
-dependencies = [
-  "mypy>=1.9.0",
-  "pydantic>=2.9.0",
-  "lsp_client>=0.0.3",
-]
+license = "MIT"
+authors = ["Christian Kissig"]
+homepage = "https://github.com/christiankissig/python-isabelle-lsp-client"
+repository = "https://github.com/christiankissig/python-isabelle-lsp-client"
+documentation = "https://github.com/christiankissig/python-isabelle-lsp-client"
+packages = [{include = "isabelle_lsp_client"}]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent"
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
 ]
 
 [tool.poetry.dependencies]
+python = "^3.10"
+mypy = "^1.9.0"
+pydantic = "^2.9.0"
 lsp_client = {git = "https://github.com/christiankissig/python-lsp-client.git"}
 
-[project.urls]
-Homepage = "https://github.com/christiankissig/python-isabelle-lsp-client"
-Repository = "https://github.com/christiankissig/python-isabelle-lsp-client"
-Documentation = "https://github.com/christiankissig/python-isabelle-lsp-client"
+[tool.poetry.group.dev.dependencies]
+black = "^23.7.0"
+isort = "^5.12.0"
+pytest = "^8.0.0"
+pytest-asyncio = "^1.0.0"
+pytest-cov = "^4.1.0"
+ruff = "^0.1.6"
+twine = "^4.0.2"
 
-[tool.setuptools]
-packages = ['isabelle_lsp_client']
+[tool.poetry.group.test.dependencies]
+annotated-types = "^0.7.0"
+iniconfig = "^2.0.0"
+mypy = "^1.9.0"
+pytest-asyncio = "^1.0.0"
+pytest-cov = "^4.1.0"
+pytest = "^8.0.0"
+ruff = "^0.1.6"
+typing_extensions = "^4.12.2"
 
-[tool.setuptools.package-data]
-isabelle_lsp_client = ['data/*']
-
-[project.optional-dependencies]
-dev = [
-    "black>=23.7.0",
-    "isort>=5.12.0",
-    "pytest",
-    "pytest-asyncio>=0.22.0",
-    "pytest-cov>=4.1.0",
-    "pytest>=8.0.0",
-    "ruff>=0.1.6",
-    "twine>=4.0.2",
-]
-test = [
-  "annotated-types>=0.7.0",
-  "iniconfig>=2.0.0",
-  "mypy>=1.9.0",
-  "pytest-asyncio>=0.22.0",
-  "pytest-cov>=4.1.0",
-  "pytest>=8.0.0",
-  "ruff>=0.1.6",
-  "typing_extensions>=4.12.2",
-]
-
+# Keep your existing tool configurations
 [tool.pytest.ini_options]
 markers = [
     "asyncio: mark test as an asyncio coroutine"
 ]
 addopts = "--strict-markers"
-testpaths = [
-    "tests"
-]
+testpaths = ["tests"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -84,7 +68,7 @@ exclude = [
 
 [tool.isort]
 profile = "black"
-line_length = 120
+line_length = 80
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0
