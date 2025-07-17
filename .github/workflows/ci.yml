@@ -45,7 +45,6 @@ jobs:
       run: |
         poetry run ruff check .
         poetry run ruff format --check .
-        poetry run isort --check-only .
         poetry run mypy .
 
     - name: Run tests
