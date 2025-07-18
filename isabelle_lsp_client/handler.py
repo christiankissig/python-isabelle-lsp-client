@@ -45,7 +45,7 @@ class ClientHandler:
         for callback in self.on_start_callbacks:
             await callback(self.document, **kwargs)
 
-    async def handle(self, response: dict) -> None:
+    async def handle(self, response: dict[Any, Any]) -> None:
         DOCUMENT_REQUIRED = {PIDE_DECORATION, PIDE_DYNAMIC_OUTPUT}
         DOCUMENT_EXACT = {PIDE_DECORATION}
 

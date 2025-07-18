@@ -15,7 +15,6 @@ def get_command_from_sledgehammer(content: str) -> str | None:
 
 def get_command_from_document(document: Document, pos: tuple[int, int]) -> str | None:
     current_line = pos[0]
-    print(f">{document.lines[current_line][pos[1] :]}<")
     if not document.lines[current_line][pos[1] :].lstrip().startswith("apply"):
         return None
     line = document.lines[current_line][pos[1] :].lstrip()[len("apply") :].lstrip()

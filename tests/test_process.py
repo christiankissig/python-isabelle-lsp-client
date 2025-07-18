@@ -1,7 +1,6 @@
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from asyncio.exceptions import CancelledError
 
 # Assuming the IsabelleProcess class is in a module called isabelle_process
 from isabelle_lsp_client import IsabelleProcess, ClientHandler
@@ -34,15 +33,15 @@ class TestIsabelleProcessTimeout:
     async def test_cancelled_error_triggers_client_handler_on_timeout(
         self, isabelle_process, mock_client_handler, mock_lsp_client
     ):
-        """Test that CancelledError triggers client handler's on_timeout method."""
+        """Test that TimeoutError triggers client handler's on_timeout method."""
         # Setup
         isabelle_process.lspClient = mock_lsp_client
         isabelle_process.script_done = False
 
-        # Configure the mock to raise CancelledError on first call, then set script_done
+        # Configure the mock to raise TimeoutError on first call, then set script_done
         async def side_effect():
             if mock_lsp_client.read_response.call_count == 1:
-                raise CancelledError("Task was cancelled")
+                raise TimeoutError("Task timed out")
             else:
                 isabelle_process.script_done = True
                 return None
@@ -67,14 +66,14 @@ class TestIsabelleProcessTimeout:
         isabelle_process.lspClient = mock_lsp_client
         isabelle_process.script_done = False
 
-        # Configure the mock to raise CancelledError on first call, then set script_done
+        # Configure the mock to raise TimeoutError on first call, then set script_done
         call_count = 0
 
         async def side_effect():
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise CancelledError("Task was cancelled")
+                raise TimeoutError("Task was cancelled")
             else:
                 isabelle_process.script_done = True
                 return None
@@ -127,14 +126,14 @@ class TestIsabelleProcessTimeout:
         isabelle_process.lspClient = mock_lsp_client
         isabelle_process.script_done = False
 
-        # Configure the mock to raise CancelledError multiple times, then complete
+        # Configure the mock to raise TimeoutError multiple times, then complete
         call_count = 0
 
         async def side_effect():
             nonlocal call_count
             call_count += 1
             if call_count <= 3:
-                raise asyncio.exceptions.CancelledError("Timeout occurred")
+                raise asyncio.exceptions.TimeoutError("Timeout occurred")
             else:
                 isabelle_process.script_done = True
                 return None

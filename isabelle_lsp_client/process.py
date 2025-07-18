@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 from typing import Any, Literal
-from asyncio.exceptions import CancelledError
 
 from lsp_client import LSPClient
 
@@ -58,7 +57,7 @@ class IsabelleProcess(object):
                     await asyncio.wait_for(self.lspClient.read_response(), self.timeout)
                 else:
                     await self.lspClient.read_response()
-            except CancelledError:
+            except TimeoutError:
                 await self.clientHandler.on_timeout()
         return True
 
@@ -107,9 +106,8 @@ class IsabelleProcess(object):
         self.command = command
 
         process = await self.start_isabelle(args["exec"], options)
-        self.lspClient = LSPClient(
-            process.stdin, process.stdout, self.clientHandler.handle
-        )
+        response_handler = self.clientHandler.handle
+        self.lspClient = LSPClient(process.stdin, process.stdout, response_handler)
         self.isaClient = IsabelleClient(self.lspClient)
 
         if command is not None:
@@ -132,3 +130,7 @@ class IsabelleProcess(object):
             and is_isabelle_ready(response["params"]["message"])
         ):
             self.isabelle_ready = True
+
+    def on_finished(self, **kwargs: Any) -> None:
+        logger.info("Finished")
+        self.script_done = True
