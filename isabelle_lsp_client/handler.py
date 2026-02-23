@@ -15,14 +15,17 @@ WINDOW_SHOWMESSAGE = "window/showMessage"
 
 
 class ClientHandler:
-    document: Document | None = None
+    document: Document | None
 
-    on_start_callbacks: list[Callable] = []
-    on_timeout_callbacks: list[Callable] = []
-    callbacks: dict[str, list[Callable[..., Any]]] = defaultdict(list)
+    on_start_callbacks: list[Callable]
+    on_timeout_callbacks: list[Callable]
+    callbacks: dict[str, list[Callable[..., Any]]]
 
     def __init__(self) -> None:
         self.document = None
+        self.on_start_callbacks = []
+        self.on_timeout_callbacks = []
+        self.callbacks = defaultdict(list)
 
     def set_document(self, document: Document) -> None:
         self.document = document
@@ -32,6 +35,15 @@ class ClientHandler:
 
     def register_on_timeout(self, handler_method: Callable) -> None:
         self.on_timeout_callbacks.append(handler_method)
+
+    def register_on_decoration(self, handler_method: Callable) -> None:
+        self.callbacks[PIDE_DECORATION].append(handler_method)
+
+    def register_on_dynamic_output(self, handler_method: Callable) -> None:
+        self.callbacks[PIDE_DYNAMIC_OUTPUT].append(handler_method)
+
+    def register_on_window_logmessage(self, handler_method: Callable) -> None:
+        self.callbacks[WINDOW_LOGMESSAGE].append(handler_method)
 
     def register(self, method: str, handler_method: Callable) -> None:
         self.callbacks[method].append(handler_method)

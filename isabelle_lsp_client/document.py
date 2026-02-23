@@ -15,20 +15,22 @@ class Document:
     """
 
     def __init__(
-        self, isabelle: IsabelleClient, uri: str, text: str | None = None
+        self, isabelle: IsabelleClient, uri: str, text: str | None = None, output_suffix: str = ""
     ) -> None:
         """
         Constructor.
 
         For the moment expects uri to be of "file://" scheme.
+        output_suffix: appended to filename on write. Empty string means in-place.
         """
         if text:
             self.lines = text.split("\n")
         else:
             self.isabelle = isabelle
             self.uri = uri
+            self.output_suffix = output_suffix
             if uri.startswith("file://"):
-                self.file_path = uri[len("file://") :]
+                self.file_path = uri[len("file://"):]
             else:
                 raise ValueError("Invalid URI scheme: " + uri)
             self.lines = []
@@ -55,13 +57,14 @@ class Document:
             self.uri, self.caret_position[0], self.caret_position[1]
         )
 
-    def write_file(self, suffix: str = "_new") -> None:
+    def write_file(self) -> None:
         """
-        Writes the file locally to disk.
+        Writes the file to disk. Uses output_suffix set at construction time:
+        empty string means in-place, any other value is appended to the filename.
         """
-        new_file_path = self.file_path + suffix
-        logger.info(f"writing file {new_file_path}")
-        with open(new_file_path, "w") as file:
+        output_path = self.file_path + self.output_suffix
+        logger.info(f"writing file {output_path}")
+        with open(output_path, "w") as file:
             file.write("\n".join(self.lines))
 
     def local_apply_change(self, change: ContentChange) -> None:

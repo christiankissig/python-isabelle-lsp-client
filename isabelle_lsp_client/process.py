@@ -23,6 +23,7 @@ class IsabelleProcess(object):
         self.clientHandler.register(WINDOW_LOGMESSAGE, self.update_status)
         self.clientHandler.register(WINDOW_SHOWMESSAGE, self.update_status)
         self.timeout = timeout
+        self._done_event = asyncio.Event()
 
     async def start_isabelle(
         self, isabelle_exec: str, isabelle_options: list
@@ -49,9 +50,7 @@ class IsabelleProcess(object):
         return process
 
     async def read_loop(self) -> Literal[True]:
-        while True:
-            if self.script_done:
-                break
+        while not self._done_event.is_set():
             try:
                 if self.timeout > 0:
                     await asyncio.wait_for(self.lspClient.read_response(), self.timeout)
@@ -86,7 +85,8 @@ class IsabelleProcess(object):
             if self.isabelle_ready:
                 break
 
-        document = Document(self.isaClient, file_uri)
+        output_suffix = args.get("output_suffix", "_new")
+        document = Document(self.isaClient, file_uri, output_suffix=output_suffix)
         self.clientHandler.set_document(document)
         await document.open_file()
 
@@ -94,7 +94,7 @@ class IsabelleProcess(object):
 
         return True
 
-    async def run(self, args: dict, command: Any | None = None) -> None:
+    async def run(self, args: dict) -> None:
         if "exec" not in args:
             raise ValueError("Isabelle executable not specified in args")
 
@@ -103,23 +103,14 @@ class IsabelleProcess(object):
         else:
             options = []
 
-        self.command = command
-
         process = await self.start_isabelle(args["exec"], options)
         response_handler = self.clientHandler.handle
         self.lspClient = LSPClient(process.stdin, process.stdout, response_handler)
         self.isaClient = IsabelleClient(self.lspClient)
 
-        if command is not None:
-            if hasattr(command, "set_isabelle"):
-                command.set_isabelle(self.isaClient)
-            if hasattr(command, "register"):
-                command.register(self.clientHandler)
-
         write_task = asyncio.create_task(self.write_loop(args))
         read_task = asyncio.create_task(self.read_loop())
-        result = await asyncio.gather(read_task, write_task)
-        print(result)
+        await asyncio.gather(read_task, write_task)
 
     async def update_status(
         self, _document: Document, response: dict, _timestamp: str
@@ -134,3 +125,4 @@ class IsabelleProcess(object):
     def on_finished(self, **kwargs: Any) -> None:
         logger.info("Finished")
         self.script_done = True
+        self._done_event.set()
