@@ -15,7 +15,11 @@ class Document:
     """
 
     def __init__(
-        self, isabelle: IsabelleClient, uri: str, text: str | None = None, output_suffix: str = ""
+        self,
+        isabelle: IsabelleClient,
+        uri: str,
+        text: str | None = None,
+        output_suffix: str = "",
     ) -> None:
         """
         Constructor.
@@ -30,7 +34,7 @@ class Document:
             self.uri = uri
             self.output_suffix = output_suffix
             if uri.startswith("file://"):
-                self.file_path = uri[len("file://"):]
+                self.file_path = uri[len("file://") :]
             else:
                 raise ValueError("Invalid URI scheme: " + uri)
             self.lines = []

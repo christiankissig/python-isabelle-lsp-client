@@ -151,6 +151,7 @@ class TestIsabelleProcessTimeout:
         isabelle_process.lspClient = mock_lsp_client
 
         with patch("asyncio.wait_for") as mock_wait_for:
+
             async def wait_for_side_effect(coro, timeout):
                 isabelle_process.on_finished()
                 return await coro
