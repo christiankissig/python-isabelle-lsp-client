@@ -11,11 +11,16 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from lsp_client import (
+    ClientCapabilities,
+    ClientInfo,
+    InitializeParams,
     InitializeRequest,
+    InitializedNotification,
     LSPClient,
-    TextDocument_DidOpen_Request,
+    TextDocumentDidOpenNotification,
     TextDocumentItem,
 )
+
 from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
 
 from .version import version
@@ -51,22 +56,32 @@ class IsabelleClient(object):
         }
 
     async def initialize(
-        self, params: dict = {}, clientCapabilities: Any = None
+        self,
+        root_uri: str = "file:///",
+        workspace_folders: list[dict] | None = None,
+        root_path: str | None = None,
+        clientCapabilities: Any = None,
     ) -> str:
         workDoneToken = str(uuid4())
-        if clientCapabilities is None:
-            params["capabilities"] = self._get_capabilities()
-        else:
-            params["capabilities"] = clientCapabilities
-        params["workDoneToken"] = workDoneToken
-        params["trace"] = "off"
-        params["clientInfo"] = self._get_client_info()
-        params["locale"] = "en_US"
-        params["processId"] = os.getpid()
-        await self.lspClient.send_request(InitializeRequest(params=params))
-        await self.lspClient._send_request(
-            {"jsonrpc": "2.0", "method": "initialized", "params": {}}
+        caps_raw = (
+            clientCapabilities if clientCapabilities is not None
+            else self._get_capabilities()
         )
+        params = InitializeParams(
+            processId=os.getpid(),
+            clientInfo=ClientInfo(**self._get_client_info()),
+            rootUri=root_uri,
+            rootPath=root_path,
+            workspaceFolders=workspace_folders,
+            capabilities=ClientCapabilities.model_validate(caps_raw),
+            trace="off",
+            workDoneToken=workDoneToken,
+        )
+        # Merge serialised params with locale (not modelled in InitializeParams).
+        params_dict = params.model_dump(exclude_none=True)
+        params_dict["locale"] = "en_US"
+        await self.lspClient.send_request(InitializeRequest(params=params_dict))
+        await self.lspClient.send_notification(InitializedNotification())
         return workDoneToken
 
     async def open_text_document(self, uri: str, text: Optional[str] = None) -> None:
@@ -82,10 +97,10 @@ class IsabelleClient(object):
         text_document_item = TextDocumentItem(
             uri=uri, languageId=self.LANGUAGE_ID, version=0, text=text
         )
-        didopen_request = TextDocument_DidOpen_Request(
-            params={"textDocument": text_document_item}
+        notification = TextDocumentDidOpenNotification(
+            params={"textDocument": text_document_item.model_dump()}
         )
-        await self.lspClient.send_request(didopen_request)
+        await self.lspClient.send_notification(notification)
 
     async def caret_update(self, uri: str, line: int, character: int) -> None:
         logger.info(f"Sending caret update request: {uri}, {line}, {character}")
