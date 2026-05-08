@@ -2,22 +2,28 @@
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry]
+[project]
 name = "isabelle_lsp_client"
 version = "0.0.1"
 description = "A Language Server Protocol client for Isabelle written in Python."
 readme = "README.rst"
-license = "MIT"
-authors = ["Christian Kissig"]
-homepage = "https://github.com/christiankissig/python-isabelle-lsp-client"
-repository = "https://github.com/christiankissig/python-isabelle-lsp-client"
-documentation = "https://github.com/christiankissig/python-isabelle-lsp-client"
-packages = [{include = "isabelle_lsp_client"}]
+license = {text = "MIT"}
+authors = [{name = "Christian Kissig"}]
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent"
 ]
+
+[project.urls]
+Homepage = "https://github.com/christiankissig/python-isabelle-lsp-client"
+Repository = "https://github.com/christiankissig/python-isabelle-lsp-client"
+Documentation = "https://github.com/christiankissig/python-isabelle-lsp-client"
+
+[tool.poetry]
+packages = [{include = "isabelle_lsp_client"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"

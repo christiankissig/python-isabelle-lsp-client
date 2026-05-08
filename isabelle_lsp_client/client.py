@@ -16,8 +16,6 @@ from lsp_client import (
     TextDocument_DidOpen_Request,
     TextDocumentItem,
 )
-from lsp_client.protocol import InitializedNotification
-
 from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
 
 from .version import version
@@ -66,7 +64,9 @@ class IsabelleClient(object):
         params["locale"] = "en_US"
         params["processId"] = os.getpid()
         await self.lspClient.send_request(InitializeRequest(params=params))
-        await self.lspClient.send_notification(InitializedNotification())
+        await self.lspClient._send_request(
+            {"jsonrpc": "2.0", "method": "initialized", "params": {}}
+        )
         return workDoneToken
 
     async def open_text_document(self, uri: str, text: Optional[str] = None) -> None:
