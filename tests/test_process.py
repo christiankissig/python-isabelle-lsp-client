@@ -1,8 +1,9 @@
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from isabelle_lsp_client import IsabelleProcess, ClientHandler
+import pytest
+
+from isabelle_lsp_client import ClientHandler, IsabelleProcess
 
 
 class TestIsabelleProcessTimeout:

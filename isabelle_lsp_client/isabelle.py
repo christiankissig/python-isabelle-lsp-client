@@ -66,4 +66,4 @@ def is_sledgehammer_noproof(content: str) -> bool:
 
 
 def is_isabelle_ready(content: str) -> bool:
-    return content.startswith("Welcome to Isabelle/HOL")
+    return content.startswith("Welcome to Isabelle/")

@@ -15,6 +15,9 @@ WINDOW_SHOWMESSAGE = "window/showMessage"
 
 
 class ClientHandler:
+    # other documents in unfinished heap
+    documnts: dict[str, Document]
+    # main document
     document: Document | None
 
     on_start_callbacks: list[Callable]
@@ -23,9 +26,13 @@ class ClientHandler:
 
     def __init__(self) -> None:
         self.document = None
+        self.documnts = {}
         self.on_start_callbacks = []
         self.on_timeout_callbacks = []
         self.callbacks = defaultdict(list)
+
+    def add_document(self, document: Document) -> None:
+        self.documnts[document.uri] = document
 
     def set_document(self, document: Document) -> None:
         self.document = document
@@ -101,12 +108,10 @@ class ClientHandler:
             await callback(self.document, response, timestamp)
 
     async def on_dynamic_output(self, response: dict) -> None:
-        if not self.document:
-            raise Exception("document not set")
-
         timestamp = time.time_ns() // 1_000_000
         logger.info("updating dynamic output")
         for callback in self.callbacks[PIDE_DYNAMIC_OUTPUT]:
+            # document only to match signature of callbacks
             await callback(self.document, response, timestamp)
 
     async def on_window_logmessage(self, response: dict) -> None:

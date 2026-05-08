@@ -27,19 +27,20 @@ class Document:
         For the moment expects uri to be of "file://" scheme.
         output_suffix: appended to filename on write. Empty string means in-place.
         """
-        if text:
+        self.isabelle = isabelle
+        self.uri = uri
+        self.output_suffix = output_suffix
+        if uri.startswith("file://"):
+            self.file_path = uri[len("file://") :]
+        else:
+            raise ValueError("Invalid URI scheme: " + uri)
+        self.version = 1
+        self.caret_position = (0, 0)
+
+        if text is not None:
             self.lines = text.split("\n")
         else:
-            self.isabelle = isabelle
-            self.uri = uri
-            self.output_suffix = output_suffix
-            if uri.startswith("file://"):
-                self.file_path = uri[len("file://") :]
-            else:
-                raise ValueError("Invalid URI scheme: " + uri)
             self.lines = []
-            self.version = 0
-            self.caret_position = (0, 0)
 
     def read_file(self) -> None:
         """
@@ -100,7 +101,7 @@ class Document:
         """
         self.version += 1
         request = TextDocument_DidChange_Request(
-            uri=self.uri, version=str(self.version), contentChanges=changes
+            uri=self.uri, version=self.version, contentChanges=changes
         )
         await self.isabelle.lspClient.send_request(request)
 

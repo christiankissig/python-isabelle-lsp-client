@@ -86,6 +86,17 @@ class IsabelleProcess(object):
                 break
 
         output_suffix = args.get("output_suffix", "_new")
+
+        if "theories" in args:
+            for theory in args["theories"]:
+                theory_uri = "file://" + os.path.abspath(theory)
+                document = Document(
+                    self.isaClient, theory_uri, output_suffix=output_suffix
+                )
+                self.clientHandler.add_document(document)
+                logger.info(f"Opening file {theory_uri}")
+                await document.open_file()
+
         document = Document(self.isaClient, file_uri, output_suffix=output_suffix)
         self.clientHandler.set_document(document)
         await document.open_file()
@@ -108,18 +119,20 @@ class IsabelleProcess(object):
         self.lspClient = LSPClient(process.stdin, process.stdout, response_handler)
         self.isaClient = IsabelleClient(self.lspClient)
 
-        write_task = asyncio.create_task(self.write_loop(args))
         read_task = asyncio.create_task(self.read_loop())
+        write_task = asyncio.create_task(self.write_loop(args))
         await asyncio.gather(read_task, write_task)
 
     async def update_status(
         self, _document: Document, response: dict, _timestamp: str
     ) -> None:
+        logger.debug(f"Updating status for message : {response}")
         if (
             "params" in response
             and "message" in response["params"]
             and is_isabelle_ready(response["params"]["message"])
         ):
+            logger.debug("Isabelle is ready")
             self.isabelle_ready = True
 
     def on_finished(self, **kwargs: Any) -> None:
