@@ -16,7 +16,7 @@ WINDOW_SHOWMESSAGE = "window/showMessage"
 
 class ClientHandler:
     # other documents in unfinished heap
-    documnts: dict[str, Document]
+    documents: dict[str, Document]
     # main document
     document: Document | None
 
@@ -26,13 +26,13 @@ class ClientHandler:
 
     def __init__(self) -> None:
         self.document = None
-        self.documnts = {}
+        self.documents = {}
         self.on_start_callbacks = []
         self.on_timeout_callbacks = []
         self.callbacks = defaultdict(list)
 
     def add_document(self, document: Document) -> None:
-        self.documnts[document.uri] = document
+        self.documents[document.uri] = document
 
     def set_document(self, document: Document) -> None:
         self.document = document
@@ -56,7 +56,7 @@ class ClientHandler:
         self.callbacks[method].append(handler_method)
 
     async def on_timeout(self, **kwargs: Any) -> None:
-        logger.warn("Timeout occurred while waiting for response")
+        logger.warning("Timeout occurred while waiting for response")
         for callback in self.on_timeout_callbacks:
             await callback(self.document, **kwargs)
 
@@ -70,8 +70,23 @@ class ClientHandler:
 
         if "method" in response:
             method = response["method"]
+        elif "id" in response:
+            # Server response to a client request (result or error).
+            if "error" in response:
+                logger.error(
+                    "Server returned error for id=%s: %s",
+                    response["id"],
+                    response["error"],
+                )
+            else:
+                logger.debug(
+                    "Server response for id=%s: %s",
+                    response["id"],
+                    response.get("result"),
+                )
+            return
         else:
-            logger.warn(f"Unhandled response: {response}")
+            logger.warning("Unrecognised message shape: %s", response)
             return
 
         if method in DOCUMENT_REQUIRED and not self.document:
@@ -92,31 +107,4 @@ class ClientHandler:
             for callback in self.callbacks[method]:
                 await callback(self.document, response, timestamp)
         else:
-            logger.warn(f"Unhandled response for method {method}")
-
-    async def on_decoration(self, response: dict) -> None:
-        if not self.document:
-            raise Exception("document not set")
-
-        timestamp = time.time_ns() // 1_000_000
-
-        if response["params"]["uri"] != self.document.uri:
-            logger.error(f"updating wrong file {response['params']['uri']}")
-            return
-
-        for callback in self.callbacks[PIDE_DECORATION]:
-            await callback(self.document, response, timestamp)
-
-    async def on_dynamic_output(self, response: dict) -> None:
-        timestamp = time.time_ns() // 1_000_000
-        logger.info("updating dynamic output")
-        for callback in self.callbacks[PIDE_DYNAMIC_OUTPUT]:
-            # document only to match signature of callbacks
-            await callback(self.document, response, timestamp)
-
-    async def on_window_logmessage(self, response: dict) -> None:
-        timestamp = time.time_ns() // 1_000_000
-        if "params" in response and "message" in response["params"]:
-            logger.info(f"logging {response['params']['message']}")
-        for callback in self.callbacks[WINDOW_LOGMESSAGE]:
-            await callback(self.document, response, timestamp)
+            logger.warning(f"Unhandled response for method {method}")
