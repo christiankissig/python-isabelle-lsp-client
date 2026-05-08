@@ -62,7 +62,7 @@ class IsabelleProcess(object):
                     await asyncio.wait_for(self.lspClient.read_response(), self.timeout)
                 else:
                     await self.lspClient.read_response()
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 await self.clientHandler.on_timeout()
         return True
 
