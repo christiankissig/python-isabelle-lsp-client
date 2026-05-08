@@ -1,6 +1,6 @@
 import logging
 
-from lsp_client import ContentChange, TextDocument_DidChange_Request
+from lsp_client import ContentChange, TextDocumentDidChangeNotification
 
 from .client import IsabelleClient
 
@@ -76,6 +76,10 @@ class Document:
         """
         Applies a single content change locally in memory.
         """
+        if change.range is None:
+            # Full-document sync: replace all content.
+            self.lines = change.text.split("\n")
+            return
         start_line = self.lines[change.range.start.line]
         end_line = self.lines[change.range.end.line]
         text_before = start_line[: change.range.start.character]
@@ -100,10 +104,10 @@ class Document:
         Applies a list of content changes in Isabelle.
         """
         self.version += 1
-        request = TextDocument_DidChange_Request(
+        notification = TextDocumentDidChangeNotification(
             uri=self.uri, version=self.version, contentChanges=changes
         )
-        await self.isabelle.lspClient.send_request(request)
+        await self.isabelle.lspClient.send_notification(notification)
 
     async def apply_changes(self, changes: list[ContentChange]) -> None:
         """
@@ -147,8 +151,6 @@ class Document:
 
         for line_number in range(start_line, len(self.lines)):
             line = self.lines[line_number]
-            if line_number == start_line:
-                line = line[start_character:]
             if line_number == start_line:
                 pos = line.find(pattern, start_character)
             else:
