@@ -1,3 +1,7 @@
+.. image:: https://github.com/christiankissig/python-isabelle-lsp-client/actions/workflows/ci.yml/badge.svg
+   :target: https://github.com/christiankissig/python-isabelle-lsp-client/actions/workflows/ci.yml
+   :alt: CI/CD
+
 python-isabelle-lsp-client
 ==========================
 
