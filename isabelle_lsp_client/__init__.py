@@ -6,10 +6,13 @@ from isabelle_lsp_client.handler import (
 )
 from isabelle_lsp_client.isabelle import (
     command_finishes_subgoal,
+    get_command_from_document,
     get_command_from_sledgehammer,
+    is_isabelle_ready,
     is_sledgehammer_done,
     is_sledgehammer_noproof,
 )
+from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
 
 from .client import IsabelleClient
 from .document import Document
@@ -19,16 +22,20 @@ from .version import version as __version__
 
 __all__ = [
     "__version__",
+    "CaretUpdateRequest",
     "ClientHandler",
     "Document",
     "IsabelleClient",
     "IsabelleProcess",
     "PIDE_DECORATION",
     "PIDE_DYNAMIC_OUTPUT",
+    "ProgressRequest",
     "WINDOW_LOGMESSAGE",
     "WINDOW_SHOWMESSAGE",
     "command_finishes_subgoal",
+    "get_command_from_document",
     "get_command_from_sledgehammer",
+    "is_isabelle_ready",
     "is_sledgehammer_done",
     "is_sledgehammer_noproof",
 ]

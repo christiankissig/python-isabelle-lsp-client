@@ -31,7 +31,7 @@ FAILED = "Sledgehammer failed to find a command."
 PATTERN = re.compile(r"Try this: (.*?) \([\.0-9]+ m?s\)")
 
 
-async def on_update_dynamic_output(document: Document, response: dict) -> None:
+async def on_update_dynamic_output(document: Document, response: dict, timestamp: int) -> None:
     """
     Handle PIDE/dynamic_output response:
 
