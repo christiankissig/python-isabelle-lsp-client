@@ -1,48 +1,127 @@
-Summary
-=======
+python-isabelle-lsp-client
+==========================
 
-This repository contains an unofficial LSP client for Isabelle vscode\_server.
-The client is written to be used with Isabelle2023, guarantees of correctness
-are not provided. Use at your own risk.
+An unofficial Python LSP client for the `Isabelle <https://isabelle.in.tum.de/>`_ theorem prover.
+Communicates with ``isabelle vscode_server`` via JSON-RPC (Language Server Protocol).
+Supports Isabelle 2023 and Isabelle 2024.
 
-Contrary to `isabelle-client 
-<https://github.com/inpefess/isabelle-client/tree/master>`_, the
-client in this repository talks to Isabelle through the language server 
-protocol allowing for more granular interaction, such as retrieving the
-proof state in a specific part of the proof script. The language server
-protocol is based on JSON-RPC.
+Contrary to `isabelle-client <https://github.com/inpefess/isabelle-client/tree/master>`_, this
+client talks to Isabelle through the Language Server Protocol, enabling more granular interaction
+such as retrieving the proof state at a specific caret position.
 
-Requirements
-============
+.. warning::
 
-The client implementation requires the `emacs fork of Isabelle
-<https://github.com/m-fleury/isabelle-emacs>`_, which
-supports non-HTML output. The client implementation supports Isabelle2023 and
-Isabelle2024.
+   This library requires the `isabelle-emacs fork <https://github.com/m-fleury/isabelle-emacs>`_
+   of Isabelle, **not** upstream Isabelle. The fork supports the non-HTML output mode
+   (``vscode_html_output=false``) that this client depends on.
 
-Until lsp_client is available through PyPI, the client implementation requires
-a virtual Python environment with `python-lsp-client
-<https://github.com/christiankissig/python-lsp-client>`_
-manually installed:
 
-::
+Prerequisites
+-------------
 
-  source /path/to/venv/bin/activate
-  cd python-lsp-client
-  pip install .
+* Python 3.10 or later
+* The ``isabelle-emacs`` fork built with the ``HOL`` heap
+* The ``lsp_client`` companion package (not on PyPI — see below)
 
-How to use
-==========
 
-Communication with the Isabelle language server is asynchronous, so that any
-implementation needs to follow a pattern of callback functions. 
+Installation
+------------
 
-As Isabelle acts as an LSP server, actions are triggered by setting a caret to 
-a specific position. In order to process a theory whole, the caret needs to be
-set to the bottom of the file. In order to retrieve the proof state after a
-specific command, the caret needs to be set to the end position of the command
-in the theory file.
+1. Install the ``lsp_client`` package from GitHub (not yet on PyPI)::
 
-If a theory file depends on other theories, corresponding files will be
-processed first. Isabelle may send status updates for these files. Appropriate
-filtering needs to be implemented.
+       pip install git+https://github.com/christiankissig/python-lsp-client.git
+
+2. Install this package::
+
+       poetry install
+
+   or directly from GitHub::
+
+       pip install git+https://github.com/christiankissig/python-isabelle-lsp-client.git
+
+
+Quick start
+-----------
+
+Communication with Isabelle is fully asynchronous. Register callbacks for the PIDE notifications
+you care about, then call ``process.run()``:
+
+.. code-block:: python
+
+   import asyncio
+   from isabelle_lsp_client import ClientHandler, IsabelleProcess, PIDE_DYNAMIC_OUTPUT
+
+   async def on_dynamic_output(document, response, timestamp):
+       print(response["params"]["content"])
+
+   async def main():
+       handler = ClientHandler()
+       handler.register(PIDE_DYNAMIC_OUTPUT, on_dynamic_output)
+
+       process = IsabelleProcess(handler)
+       await process.run({
+           "exec": "/path/to/isabelle-emacs/bin/isabelle",
+           "theory": "MyTheory.thy",
+       })
+
+   asyncio.run(main())
+
+See ``isabelle_lsp_client/examples/auto_sledge.py`` for a complete working example that
+automatically replaces ``sledgehammer`` calls with the proofs Isabelle finds.
+
+Caret-driven elaboration
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Isabelle elaborates the proof state at the current caret position. To process a whole theory,
+move the caret to the end of the file. To retrieve the proof state after a specific tactic, move
+the caret to the end of that tactic. If a theory depends on others, Isabelle may send status
+updates for those files too — filter by URI if needed.
+
+
+Environment variables
+---------------------
+
+``ISABELLE_EXEC``
+    Path to the ``isabelle`` executable from the isabelle-emacs fork.
+    Used by the ``auto_sledge`` example script.
+
+
+``run()`` arguments
+-------------------
+
++---------------------+-----------------------------------------------------------+
+| Key                 | Description                                               |
++=====================+===========================================================+
+| ``exec``            | **Required.** Path to the Isabelle executable.            |
++---------------------+-----------------------------------------------------------+
+| ``theory``          | **Required.** Path to the ``.thy`` file to open.         |
++---------------------+-----------------------------------------------------------+
+| ``theories``        | Optional list of additional ``.thy`` files to open.      |
++---------------------+-----------------------------------------------------------+
+| ``options``         | Extra flags passed to ``isabelle vscode_server``.         |
++---------------------+-----------------------------------------------------------+
+| ``output_suffix``   | Suffix appended to the filename on write (default:        |
+|                     | ``_new``).                                                |
++---------------------+-----------------------------------------------------------+
+| ``log_path``        | Path for the Isabelle server log (default:                |
+|                     | ``/tmp/python-lsp-isa``).                                 |
++---------------------+-----------------------------------------------------------+
+| ``startup_timeout`` | Seconds to wait for Isabelle to become ready              |
+|                     | (default: 120).                                           |
++---------------------+-----------------------------------------------------------+
+
+
+Development
+-----------
+
+Run tests::
+
+    pytest
+
+Type-check::
+
+    mypy isabelle_lsp_client/
+
+Lint (import sorting)::
+
+    ruff check .
