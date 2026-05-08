@@ -651,20 +651,19 @@ name = "lsp-client"
 version = "0.0.3"
 description = "A client implementation of the Language Server Protocol in Python"
 optional = false
-python-versions = "^3.10"
+python-versions = ">=3.10"
 groups = ["main"]
 files = []
 develop = false
 
 [package.dependencies]
-mypy = "^1.9.0"
-pydantic = "^2.9.0"
+pydantic = ">=2.9.0,<3.0.0"
 
 [package.source]
 type = "git"
 url = "https://github.com/christiankissig/python-lsp-client.git"
 reference = "HEAD"
-resolved_reference = "3ed08a2f2ed2250e6edaedac76a533addc059b9a"
+resolved_reference = "79bcf9557ae11de44143346a3a1cc72f98a6d37e"
 
 [[package]]
 name = "markdown-it-py"
