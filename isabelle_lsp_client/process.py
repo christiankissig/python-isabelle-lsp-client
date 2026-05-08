@@ -14,19 +14,25 @@ logger = logging.getLogger(__name__)
 
 
 class IsabelleProcess(object):
-    isabelle_ready = False
     script_done = False
-    command: Any | None = None
 
-    def __init__(self, clientHandler: ClientHandler, timeout: int = -1) -> None:
+    def __init__(
+        self,
+        clientHandler: ClientHandler,
+        timeout: int = -1,
+        command: Any | None = None,
+    ) -> None:
         self.clientHandler = clientHandler
         self.clientHandler.register(WINDOW_LOGMESSAGE, self.update_status)
         self.clientHandler.register(WINDOW_SHOWMESSAGE, self.update_status)
         self.timeout = timeout
+        self.command = command
         self._done_event = asyncio.Event()
+        self._isabelle_ready_event = asyncio.Event()
+        self._process: asyncio.subprocess.Process | None = None
 
     async def start_isabelle(
-        self, isabelle_exec: str, isabelle_options: list
+        self, isabelle_exec: str, isabelle_options: list, log_path: str
     ) -> asyncio.subprocess.Process:
         isabelle_args = [
             "vscode_server",
@@ -34,7 +40,7 @@ class IsabelleProcess(object):
             "vscode_pide_extensions",
             "-v",
             "-L",
-            "/tmp/python-lsp-isa",
+            log_path,
             "-o",
             "vscode_html_output=false",
         ]
@@ -61,8 +67,6 @@ class IsabelleProcess(object):
         return True
 
     async def write_loop(self, args: dict) -> Literal[True]:
-        self.isabelle_ready = False
-
         relative_filename = args["theory"]
         file_path = os.path.abspath(relative_filename)
         root_path = os.path.dirname(file_path)
@@ -70,20 +74,23 @@ class IsabelleProcess(object):
         workspace_name = root_path.split("/")[-1]
         file_uri = "file://" + file_path
 
+        startup_timeout = args.get("startup_timeout", 120)
+
         await self.isaClient.initialize(
-            {
-                "workspaceFolders": [
-                    {"uri": "file://" + root_path, "name": workspace_name}
-                ],
-                "rootUri": "file://" + root_path,
-                "rootPath": root_path,
-            }
+            root_uri="file://" + root_path,
+            workspace_folders=[{"uri": "file://" + root_path, "name": workspace_name}],
+            root_path=root_path,
         )
 
-        while True:
-            await asyncio.sleep(10)
-            if self.isabelle_ready:
-                break
+        try:
+            await asyncio.wait_for(
+                self._isabelle_ready_event.wait(), timeout=startup_timeout
+            )
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"Isabelle did not become ready within {startup_timeout}s. "
+                "Check that the executable is correct and Isabelle's heap is built."
+            )
 
         output_suffix = args.get("output_suffix", "_new")
 
@@ -109,19 +116,49 @@ class IsabelleProcess(object):
         if "exec" not in args:
             raise ValueError("Isabelle executable not specified in args")
 
-        if "options" in args:
-            options = args["options"]
-        else:
-            options = []
+        options = args.get("options", [])
+        log_path = args.get("log_path", "/tmp/python-lsp-isa")
 
-        process = await self.start_isabelle(args["exec"], options)
+        self._process = await self.start_isabelle(args["exec"], options, log_path)
         response_handler = self.clientHandler.handle
-        self.lspClient = LSPClient(process.stdin, process.stdout, response_handler)
+        self.lspClient = LSPClient(
+            self._process.stdin, self._process.stdout, response_handler
+        )
         self.isaClient = IsabelleClient(self.lspClient)
+
+        if self.command is not None:
+            if hasattr(self.command, "set_isabelle"):
+                self.command.set_isabelle(self.isaClient)
+            if hasattr(self.command, "register"):
+                self.command.register(self.clientHandler)
 
         read_task = asyncio.create_task(self.read_loop())
         write_task = asyncio.create_task(self.write_loop(args))
-        await asyncio.gather(read_task, write_task)
+        try:
+            await asyncio.gather(read_task, write_task)
+        except Exception:
+            read_task.cancel()
+            write_task.cancel()
+            await asyncio.gather(read_task, write_task, return_exceptions=True)
+            raise
+        finally:
+            await self._shutdown_process()
+
+    async def _shutdown_process(self) -> None:
+        if self._process is None or self._process.returncode is not None:
+            return
+        if self._process.stdin is not None:
+            try:
+                self._process.stdin.close()
+                await self._process.stdin.wait_closed()
+            except Exception:
+                pass
+        self._process.terminate()
+        try:
+            await asyncio.wait_for(self._process.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            self._process.kill()
+            await self._process.wait()
 
     async def update_status(
         self, _document: Document, response: dict, _timestamp: str
@@ -133,7 +170,7 @@ class IsabelleProcess(object):
             and is_isabelle_ready(response["params"]["message"])
         ):
             logger.debug("Isabelle is ready")
-            self.isabelle_ready = True
+            self._isabelle_ready_event.set()
 
     def on_finished(self, **kwargs: Any) -> None:
         logger.info("Finished")
