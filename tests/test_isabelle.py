@@ -1,5 +1,3 @@
-from unittest.mock import MagicMock
-
 from isabelle_lsp_client.isabelle import (
     command_finishes_subgoal,
     get_command_from_sledgehammer,

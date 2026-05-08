@@ -4,7 +4,6 @@ import pytest
 
 from isabelle_lsp_client.handler import (
     PIDE_DECORATION,
-    PIDE_DYNAMIC_OUTPUT,
     WINDOW_LOGMESSAGE,
     ClientHandler,
 )
@@ -131,7 +130,9 @@ class TestHandleDispatch:
 
 class TestOnStartOnTimeout:
     @pytest.mark.asyncio
-    async def test_on_start_calls_all_registered_callbacks(self, handler, mock_document):
+    async def test_on_start_calls_all_registered_callbacks(
+        self, handler, mock_document
+    ):
         handler.set_document(mock_document)
         cb1, cb2 = AsyncMock(), AsyncMock()
         handler.register_on_start(cb1)

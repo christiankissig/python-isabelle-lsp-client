@@ -4,7 +4,6 @@ import pytest
 
 from isabelle_lsp_client.client import IsabelleClient
 
-
 URI = "file:///path/to/Theory.thy"
 
 
@@ -98,7 +97,9 @@ class TestOpenTextDocument:
 
 class TestCaretUpdate:
     @pytest.mark.asyncio
-    async def test_send_request_called_with_caret_update_request(self, client, mock_lsp):
+    async def test_send_request_called_with_caret_update_request(
+        self, client, mock_lsp
+    ):
         from isabelle_lsp_client.protocol import CaretUpdateRequest
 
         await client.caret_update(URI, line=3, character=7)

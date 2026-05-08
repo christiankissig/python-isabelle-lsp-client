@@ -13,9 +13,9 @@ from uuid import uuid4
 from lsp_client import (
     ClientCapabilities,
     ClientInfo,
+    InitializedNotification,
     InitializeParams,
     InitializeRequest,
-    InitializedNotification,
     LSPClient,
     TextDocumentDidOpenNotification,
     TextDocumentItem,
@@ -64,7 +64,8 @@ class IsabelleClient(object):
     ) -> str:
         workDoneToken = str(uuid4())
         caps_raw = (
-            clientCapabilities if clientCapabilities is not None
+            clientCapabilities
+            if clientCapabilities is not None
             else self._get_capabilities()
         )
         params = InitializeParams(

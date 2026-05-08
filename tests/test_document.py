@@ -1,7 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
-
 from lsp_client import ContentChange, Position, Range
 
 from isabelle_lsp_client.document import Document
@@ -88,18 +87,14 @@ class TestLocalApplyChange:
 
     def test_single_line_replacement(self, mock_isabelle):
         doc = make_doc(mock_isabelle, text="apply sledge\napply blast")
-        change = ContentChange(
-            text="simp", range=self._range(0, 6, 0, 12)
-        )
+        change = ContentChange(text="simp", range=self._range(0, 6, 0, 12))
         doc.local_apply_change(change)
         assert doc.lines[0] == "apply simp"
 
     def test_multi_line_replacement(self, mock_isabelle):
         # Range (0,1)→(1,3) replaces "aa\nbbb" with "X"; text_after="" from end of "bbb"
         doc = make_doc(mock_isabelle, text="aaa\nbbb\nccc")
-        change = ContentChange(
-            text="X", range=self._range(0, 1, 1, 3)
-        )
+        change = ContentChange(text="X", range=self._range(0, 1, 1, 3))
         doc.local_apply_change(change)
         assert doc.lines == ["aX", "ccc"]
 
@@ -135,7 +130,9 @@ class TestFindNext:
         doc = make_doc(mock_isabelle, text="xx apply simp")
         assert doc.find_next("apply", start_line=0, start_character=3) == (0, 3)
 
-    def test_pattern_before_start_character_not_found_on_start_line(self, mock_isabelle):
+    def test_pattern_before_start_character_not_found_on_start_line(
+        self, mock_isabelle
+    ):
         doc = make_doc(mock_isabelle, text="apply simp\napply blast")
         # start_character=6 skips "apply " — "simp" is at col 6, which is exactly at boundary
         line, char = doc.find_next("apply", start_line=0, start_character=1)
