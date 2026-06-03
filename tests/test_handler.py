@@ -7,6 +7,16 @@ from isabelle_lsp_client.handler import (
     WINDOW_LOGMESSAGE,
     ClientHandler,
 )
+from isabelle_lsp_client.protocol import (
+    PROGRESS,
+    WORK_DONE_PROGRESS_CREATE,
+    WorkDoneProgressBegin,
+    WorkDoneProgressReport,
+)
+
+
+def _progress(token, value):
+    return {"method": PROGRESS, "params": {"token": token, "value": value}}
 
 
 @pytest.fixture
@@ -151,6 +161,74 @@ class TestOnStartOnTimeout:
         await handler.on_timeout()
 
         cb.assert_awaited_once_with(handler.document)
+
+
+class TestWorkDoneProgress:
+    @pytest.mark.asyncio
+    async def test_progress_callback_is_called(self, handler):
+        cb = AsyncMock()
+        handler.register_on_progress(cb)
+
+        await handler.handle(_progress("t1", {"kind": "begin", "title": "Build"}))
+
+        cb.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_begin_tracked_by_token(self, handler):
+        await handler.handle(
+            _progress("t1", {"kind": "begin", "title": "Build", "percentage": 0})
+        )
+
+        assert isinstance(handler.progress["t1"], WorkDoneProgressBegin)
+        assert handler.progress["t1"].title == "Build"
+
+    @pytest.mark.asyncio
+    async def test_report_updates_tracked_state(self, handler):
+        await handler.handle(_progress("t1", {"kind": "begin", "title": "Build"}))
+        await handler.handle(
+            _progress("t1", {"kind": "report", "percentage": 42, "message": "x"})
+        )
+
+        assert isinstance(handler.progress["t1"], WorkDoneProgressReport)
+        assert handler.progress["t1"].percentage == 42
+
+    @pytest.mark.asyncio
+    async def test_report_without_begin_is_not_tracked(self, handler):
+        await handler.handle(_progress("t1", {"kind": "report", "percentage": 10}))
+
+        assert "t1" not in handler.progress
+
+    @pytest.mark.asyncio
+    async def test_end_clears_tracked_state(self, handler):
+        await handler.handle(_progress("t1", {"kind": "begin", "title": "Build"}))
+        await handler.handle(_progress("t1", {"kind": "end", "message": "done"}))
+
+        assert "t1" not in handler.progress
+
+    @pytest.mark.asyncio
+    async def test_progress_without_callback_does_not_warn(self, handler, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            await handler.handle(_progress("t1", {"kind": "begin", "title": "Build"}))
+
+        assert not any("Unhandled" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_create_request_dispatched_to_callback(self, handler):
+        cb = AsyncMock()
+        handler.register_on_work_done_progress_create(cb)
+
+        await handler.handle(
+            {
+                "id": 7,
+                "method": WORK_DONE_PROGRESS_CREATE,
+                "params": {"token": "t1"},
+            }
+        )
+
+        cb.assert_awaited_once()
+        assert cb.call_args[0][1]["id"] == 7
 
 
 class TestDocuments:

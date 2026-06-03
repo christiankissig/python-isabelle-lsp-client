@@ -9,6 +9,7 @@ from .client import IsabelleClient
 from .document import Document
 from .handler import WINDOW_LOGMESSAGE, WINDOW_SHOWMESSAGE, ClientHandler
 from .isabelle import is_isabelle_ready
+from .protocol import WORK_DONE_PROGRESS_CREATE
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,12 @@ class IsabelleProcess(object):
         )
         self.isaClient = IsabelleClient(self.lspClient)
 
+        # Acknowledge server-initiated work done progress as required by the
+        # spec; the token is invalid until the create request is answered.
+        self.clientHandler.register(
+            WORK_DONE_PROGRESS_CREATE, self.acknowledge_work_done_progress_create
+        )
+
         if self.command is not None:
             if hasattr(self.command, "set_isabelle"):
                 self.command.set_isabelle(self.isaClient)
@@ -171,6 +178,13 @@ class IsabelleProcess(object):
         ):
             logger.debug("Isabelle is ready")
             self._isabelle_ready_event.set()
+
+    async def acknowledge_work_done_progress_create(
+        self, _document: Document | None, response: dict, _timestamp: str
+    ) -> None:
+        request_id = response.get("id")
+        if request_id is not None:
+            await self.isaClient.acknowledge_work_done_progress_create(request_id)
 
     def on_finished(self, **kwargs: Any) -> None:
         logger.info("Finished")

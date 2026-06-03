@@ -12,6 +12,7 @@ def mock_lsp():
     lsp = MagicMock()
     lsp.send_request = AsyncMock()
     lsp.send_notification = AsyncMock()
+    lsp._send_request = AsyncMock()
     return lsp
 
 
@@ -110,3 +111,26 @@ class TestCaretUpdate:
         assert req.params["uri"] == URI
         assert req.params["line"] == 3
         assert req.params["character"] == 7
+
+
+class TestWorkDoneProgress:
+    @pytest.mark.asyncio
+    async def test_acknowledge_create_sends_null_result_response(
+        self, client, mock_lsp
+    ):
+        await client.acknowledge_work_done_progress_create(request_id=7)
+
+        mock_lsp._send_request.assert_awaited_once_with(
+            {"jsonrpc": "2.0", "id": 7, "result": None}
+        )
+
+    @pytest.mark.asyncio
+    async def test_cancel_sends_cancel_notification(self, client, mock_lsp):
+        from isabelle_lsp_client.protocol import WorkDoneProgressCancelNotification
+
+        await client.cancel_work_done_progress(token="t1")
+
+        mock_lsp.send_notification.assert_awaited_once()
+        notif = mock_lsp.send_notification.call_args[0][0]
+        assert isinstance(notif, WorkDoneProgressCancelNotification)
+        assert notif.params == {"token": "t1"}

@@ -4,6 +4,15 @@ from collections import defaultdict
 from typing import Any, Callable
 
 from isabelle_lsp_client.document import Document
+from isabelle_lsp_client.protocol import (
+    PROGRESS,
+    WORK_DONE_PROGRESS_CREATE,
+    ProgressToken,
+    WorkDoneProgress,
+    WorkDoneProgressBegin,
+    WorkDoneProgressEnd,
+    parse_work_done_progress,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +32,9 @@ class ClientHandler:
     on_start_callbacks: list[Callable]
     on_timeout_callbacks: list[Callable]
     callbacks: dict[str, list[Callable[..., Any]]]
+    # Latest work done progress state, keyed by progress token. Entries are
+    # added on a `begin` notification and removed on `end`.
+    progress: dict[ProgressToken, WorkDoneProgress]
 
     def __init__(self) -> None:
         self.document = None
@@ -30,6 +42,7 @@ class ClientHandler:
         self.on_start_callbacks = []
         self.on_timeout_callbacks = []
         self.callbacks = defaultdict(list)
+        self.progress = {}
 
     def add_document(self, document: Document) -> None:
         self.documents[document.uri] = document
@@ -52,6 +65,14 @@ class ClientHandler:
     def register_on_window_logmessage(self, handler_method: Callable) -> None:
         self.callbacks[WINDOW_LOGMESSAGE].append(handler_method)
 
+    def register_on_progress(self, handler_method: Callable) -> None:
+        """Register a callback for ``$/progress`` notifications."""
+        self.callbacks[PROGRESS].append(handler_method)
+
+    def register_on_work_done_progress_create(self, handler_method: Callable) -> None:
+        """Register a callback for ``window/workDoneProgress/create`` requests."""
+        self.callbacks[WORK_DONE_PROGRESS_CREATE].append(handler_method)
+
     def register(self, method: str, handler_method: Callable) -> None:
         self.callbacks[method].append(handler_method)
 
@@ -63,6 +84,28 @@ class ClientHandler:
     async def on_start(self, **kwargs: Any) -> None:
         for callback in self.on_start_callbacks:
             await callback(self.document, **kwargs)
+
+    def _track_progress(self, response: dict[Any, Any]) -> None:
+        """
+        Maintain the per-token work done progress state from a ``$/progress``
+        notification. Non work done progress payloads are ignored.
+        """
+        params = response.get("params") or {}
+        token = params.get("token")
+        if token is None:
+            return
+        progress = parse_work_done_progress(params.get("value"))
+        if progress is None:
+            return
+        if isinstance(progress, WorkDoneProgressBegin):
+            self.progress[token] = progress
+        elif isinstance(progress, WorkDoneProgressEnd):
+            # The token is no longer valid once the operation ends.
+            self.progress.pop(token, None)
+        else:
+            # A report only updates the in-flight state if a begin was seen.
+            if token in self.progress:
+                self.progress[token] = progress
 
     async def handle(self, response: dict[Any, Any]) -> None:
         DOCUMENT_REQUIRED = {PIDE_DECORATION, PIDE_DYNAMIC_OUTPUT}
@@ -102,9 +145,16 @@ class ClientHandler:
             logger.error(f"updating wrong file {response['params']['uri']}")
             return
 
-        if method in self.callbacks:
+        if method == PROGRESS:
+            self._track_progress(response)
+
+        if self.callbacks.get(method):
             logger.info(f"Handling response for method {method}")
             for callback in self.callbacks[method]:
                 await callback(self.document, response, timestamp)
+        elif method in (PROGRESS, WORK_DONE_PROGRESS_CREATE):
+            # Known work done progress methods are handled internally even
+            # without a consumer callback registered.
+            logger.debug(f"No consumer callback for method {method}")
         else:
             logger.warning(f"Unhandled response for method {method}")

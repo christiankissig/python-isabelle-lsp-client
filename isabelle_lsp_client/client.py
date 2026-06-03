@@ -21,7 +21,12 @@ from lsp_client import (
     TextDocumentItem,
 )
 
-from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
+from isabelle_lsp_client.protocol import (
+    CaretUpdateRequest,
+    ProgressRequest,
+    ProgressToken,
+    WorkDoneProgressCancelNotification,
+)
 
 from .version import version
 
@@ -109,3 +114,25 @@ class IsabelleClient(object):
 
     async def progress_request(self) -> None:
         await self.lspClient.send_request(ProgressRequest())
+
+    async def acknowledge_work_done_progress_create(self, request_id: int) -> None:
+        """
+        Respond to a server-initiated ``window/workDoneProgress/create`` request.
+
+        The request requires a response before the server starts reporting
+        progress against the created token; a ``null`` result acknowledges it.
+        """
+        logger.info(f"Acknowledging workDoneProgress/create request {request_id}")
+        await self.lspClient._send_request(
+            {"jsonrpc": "2.0", "id": request_id, "result": None}
+        )
+
+    async def cancel_work_done_progress(self, token: ProgressToken) -> None:
+        """
+        Send ``window/workDoneProgress/cancel`` to cancel a server-initiated,
+        cancellable work done progress identified by ``token``.
+        """
+        logger.info(f"Cancelling workDoneProgress for token {token}")
+        await self.lspClient.send_notification(
+            WorkDoneProgressCancelNotification(token=token)
+        )
