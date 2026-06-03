@@ -145,6 +145,38 @@ class TestIsabelleProcessTimeout:
         mock_client_handler.on_timeout.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_acknowledge_work_done_progress_create_responds(
+        self, isabelle_process
+    ):
+        """The create request is acknowledged via the Isabelle client."""
+        isabelle_process.isaClient = MagicMock()
+        isabelle_process.isaClient.acknowledge_work_done_progress_create = AsyncMock()
+
+        await isabelle_process.acknowledge_work_done_progress_create(
+            None,
+            {"id": 9, "method": "window/workDoneProgress/create", "params": {}},
+            "ts",
+        )
+
+        isabelle_process.isaClient.acknowledge_work_done_progress_create.assert_awaited_once_with(
+            9
+        )
+
+    @pytest.mark.asyncio
+    async def test_acknowledge_work_done_progress_create_without_id_noop(
+        self, isabelle_process
+    ):
+        """A malformed create request without an id is ignored."""
+        isabelle_process.isaClient = MagicMock()
+        isabelle_process.isaClient.acknowledge_work_done_progress_create = AsyncMock()
+
+        await isabelle_process.acknowledge_work_done_progress_create(
+            None, {"method": "window/workDoneProgress/create"}, "ts"
+        )
+
+        isabelle_process.isaClient.acknowledge_work_done_progress_create.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_wait_for_called_with_correct_timeout(
         self, isabelle_process, mock_client_handler, mock_lsp_client
     ):
