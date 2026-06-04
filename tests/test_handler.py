@@ -6,6 +6,7 @@ from isabelle_lsp_client.handler import (
     PIDE_DECORATION,
     PIDE_DYNAMIC_OUTPUT,
     PIDE_PROGRESS,
+    TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
     WINDOW_LOGMESSAGE,
     ClientHandler,
 )
@@ -408,6 +409,111 @@ class TestProgressNodesTracking:
         )
 
         assert handler.progress_nodes.nodes_status[0].name == "Theory.thy"
+
+
+def _diagnostics(uri, *lines):
+    return {
+        "method": TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
+        "params": {
+            "uri": uri,
+            "diagnostics": [
+                {
+                    "range": {
+                        "start": {"line": line, "character": 0},
+                        "end": {"line": line, "character": 1},
+                    },
+                    "message": f"err {line}",
+                    "severity": 1,
+                }
+                for line in lines
+            ],
+        },
+    }
+
+
+class TestPublishDiagnostics:
+    @pytest.mark.asyncio
+    async def test_diagnostics_held_per_uri(self, handler):
+        await handler.handle(_diagnostics("file:///A.thy", 3, 7))
+
+        held = handler.diagnostics["file:///A.thy"]
+        assert [d.range.start.line for d in held] == [3, 7]
+        assert held[0].message == "err 3"
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_for_imported_theory_needs_no_main_document(
+        self, handler
+    ):
+        # No main document set; diagnostics for an imported theory still land.
+        await handler.handle(_diagnostics("file:///Imported.thy", 1))
+        assert "file:///Imported.thy" in handler.diagnostics
+
+    @pytest.mark.asyncio
+    async def test_republish_replaces_previous_set(self, handler):
+        await handler.handle(_diagnostics("file:///A.thy", 3, 7))
+        await handler.handle(_diagnostics("file:///A.thy", 5))
+
+        assert [d.range.start.line for d in handler.diagnostics["file:///A.thy"]] == [5]
+
+    @pytest.mark.asyncio
+    async def test_cleared_document_stores_empty_list(self, handler):
+        await handler.handle(_diagnostics("file:///A.thy", 3))
+        await handler.handle(_diagnostics("file:///A.thy"))
+
+        assert handler.diagnostics["file:///A.thy"] == []
+
+    @pytest.mark.asyncio
+    async def test_multiple_uris_tracked_independently(self, handler):
+        await handler.handle(_diagnostics("file:///A.thy", 1))
+        await handler.handle(_diagnostics("file:///B.thy", 2, 3))
+
+        assert set(handler.diagnostics) == {"file:///A.thy", "file:///B.thy"}
+        assert len(handler.diagnostics["file:///B.thy"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_callback_runs_after_store_in_registration_order(self, handler):
+        seen = []
+
+        async def cb1(_doc, response, _ts):
+            # The handler store is updated before callbacks fire.
+            uri = response["params"]["uri"]
+            seen.append(("cb1", len(handler.diagnostics[uri])))
+
+        async def cb2(_doc, response, _ts):
+            seen.append(("cb2", None))
+
+        handler.register_on_publish_diagnostics(cb1)
+        handler.register_on_publish_diagnostics(cb2)
+
+        await handler.handle(_diagnostics("file:///A.thy", 1, 2))
+
+        assert [name for name, _ in seen] == ["cb1", "cb2"]
+        assert seen[0] == ("cb1", 2)
+
+    @pytest.mark.asyncio
+    async def test_malformed_diagnostics_keeps_previous(self, handler):
+        await handler.handle(_diagnostics("file:///A.thy", 3))
+        # A diagnostic missing the required `range` must not clobber the set.
+        await handler.handle(
+            {
+                "method": TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
+                "params": {
+                    "uri": "file:///A.thy",
+                    "diagnostics": [{"message": "no range"}],
+                },
+            }
+        )
+
+        assert [d.range.start.line for d in handler.diagnostics["file:///A.thy"]] == [3]
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_without_callback_does_not_warn(self, handler, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            await handler.handle(_diagnostics("file:///A.thy", 1))
+
+        assert not any("Unhandled" in r.message for r in caplog.records)
 
 
 class TestInitializeResult:

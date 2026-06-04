@@ -16,6 +16,8 @@ from typing import Any, Union
 
 from lsp_client import (
     BaseRequest,
+    Diagnostic,
+    DiagnosticSeverity,
     Position,
     ProgressToken,
     Range,
@@ -306,6 +308,41 @@ def parse_progress(params: dict | None) -> ProgressNodes | None:
     return ProgressNodes.model_validate(params)
 
 
+# Publish diagnostics
+# https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics
+#
+# `textDocument/publishDiagnostics` is a standard LSP server -> client
+# notification. Isabelle uses it to report theory errors (bad imports, undefined
+# facts, ...). The `Diagnostic` / `DiagnosticSeverity` element types are reused
+# from :mod:`lsp_client`; only the notification params are modelled here.
+#
+# Isabelle quirks tolerated by the model: each diagnostic may carry a spurious
+# `jsonrpc` key (ignored), and `severity` is frequently absent even for errors.
+
+
+class PublishDiagnosticsParams(BaseModel):
+    """
+    Payload of a ``textDocument/publishDiagnostics`` notification: the full set
+    of diagnostics for the document identified by ``uri``. Each notification
+    replaces any previously published diagnostics for that ``uri``.
+    """
+
+    uri: str
+    version: int | None = None
+    diagnostics: list[Diagnostic] = Field(default_factory=list)
+
+
+def parse_publish_diagnostics(params: dict | None) -> PublishDiagnosticsParams | None:
+    """
+    Parse the ``params`` of a ``textDocument/publishDiagnostics`` notification
+    into a typed :class:`PublishDiagnosticsParams`, or ``None`` if there is no
+    payload. Diagnostic order is preserved.
+    """
+    if params is None:
+        return None
+    return PublishDiagnosticsParams.model_validate(params)
+
+
 __all__ = [
     "CaretUpdateRequest",
     "ProgressRequest",
@@ -331,4 +368,8 @@ __all__ = [
     "NodeStatus",
     "ProgressNodes",
     "parse_progress",
+    "Diagnostic",
+    "DiagnosticSeverity",
+    "PublishDiagnosticsParams",
+    "parse_publish_diagnostics",
 ]
