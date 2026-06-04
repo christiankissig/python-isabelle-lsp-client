@@ -10,6 +10,7 @@ from isabelle_lsp_client.document import Document
 from isabelle_lsp_client.protocol import (
     PROGRESS,
     WORK_DONE_PROGRESS_CREATE,
+    ApplyWorkspaceEditParams,
     DecorationParams,
     Diagnostic,
     DynamicOutput,
@@ -18,6 +19,8 @@ from isabelle_lsp_client.protocol import (
     WorkDoneProgress,
     WorkDoneProgressBegin,
     WorkDoneProgressEnd,
+    WorkspaceEdit,
+    parse_apply_edit,
     parse_decoration,
     parse_dynamic_output,
     parse_progress,
@@ -32,6 +35,7 @@ PIDE_DECORATION = "PIDE/decoration"
 PIDE_DYNAMIC_OUTPUT = "PIDE/dynamic_output"
 PIDE_PROGRESS = "PIDE/progress"
 TEXTDOCUMENT_PUBLISHDIAGNOSTICS = "textDocument/publishDiagnostics"
+WORKSPACE_APPLYEDIT = "workspace/applyEdit"
 WINDOW_LOGMESSAGE = "window/logMessage"
 WINDOW_SHOWMESSAGE = "window/showMessage"
 
@@ -64,6 +68,9 @@ class ClientHandler:
     # replaces all diagnostics for a URI, so each entry is the current full set
     # (in publication order). Covers imported theories, not just the main one.
     diagnostics: dict[str, list[Diagnostic]]
+    # Latest workspace/applyEdit request from the server. Held for inspection;
+    # not applied automatically (see apply_workspace_edit).
+    last_apply_edit: ApplyWorkspaceEditParams | None
 
     def __init__(self) -> None:
         self.document = None
@@ -77,6 +84,7 @@ class ClientHandler:
         self.decorations = None
         self.progress_nodes = None
         self.diagnostics = {}
+        self.last_apply_edit = None
 
     def add_document(self, document: Document) -> None:
         self.documents[document.uri] = document
@@ -118,6 +126,15 @@ class ClientHandler:
         after :attr:`diagnostics` has been updated for the notification's URI.
         """
         self.callbacks[TEXTDOCUMENT_PUBLISHDIAGNOSTICS].append(handler_method)
+
+    def register_on_apply_edit(self, handler_method: Callable) -> None:
+        """
+        Register a callback for ``workspace/applyEdit`` requests. Callbacks fire
+        in registration order, each after :attr:`last_apply_edit` is updated. The
+        edit is not applied automatically; call :meth:`apply_workspace_edit` to
+        apply it to the open documents.
+        """
+        self.callbacks[WORKSPACE_APPLYEDIT].append(handler_method)
 
     def register_on_work_done_progress_create(self, handler_method: Callable) -> None:
         """Register a callback for ``window/workDoneProgress/create`` requests."""
@@ -218,6 +235,37 @@ class ClientHandler:
         if published is not None:
             self.diagnostics[published.uri] = published.diagnostics
 
+    def _track_apply_edit(self, response: dict[Any, Any]) -> None:
+        """
+        Parse and store the latest ``workspace/applyEdit`` request. A malformed
+        payload leaves the previous value in place.
+        """
+        try:
+            self.last_apply_edit = parse_apply_edit(response.get("params"))
+        except ValidationError as e:
+            logger.warning("Could not parse applyEdit: %s", e)
+
+    async def apply_workspace_edit(self, edit: WorkspaceEdit) -> None:
+        """
+        Apply a workspace edit to the matching open documents, document-change by
+        document-change in order. Changes targeting a URI with no open document
+        are skipped with a warning.
+        """
+        for change in edit.document_changes:
+            document = self.documents.get(change.uri)
+            if (
+                document is None
+                and self.document is not None
+                and self.document.uri == change.uri
+            ):
+                document = self.document
+            if document is None:
+                logger.warning(
+                    "applyEdit for unknown document %s; skipping", change.uri
+                )
+                continue
+            await document.apply_text_edits(change.edits)
+
     async def handle(self, response: dict[Any, Any]) -> None:
         DOCUMENT_REQUIRED = {PIDE_DECORATION, PIDE_DYNAMIC_OUTPUT}
         DOCUMENT_EXACT = {PIDE_DECORATION}
@@ -269,6 +317,8 @@ class ClientHandler:
             self._track_progress_nodes(response)
         elif method == TEXTDOCUMENT_PUBLISHDIAGNOSTICS:
             self._track_diagnostics(response)
+        elif method == WORKSPACE_APPLYEDIT:
+            self._track_apply_edit(response)
 
         if self.callbacks.get(method):
             logger.info(f"Handling response for method {method}")
@@ -279,6 +329,7 @@ class ClientHandler:
             WORK_DONE_PROGRESS_CREATE,
             PIDE_PROGRESS,
             TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
+            WORKSPACE_APPLYEDIT,
         ):
             # Known methods handled internally even without a consumer callback.
             logger.debug(f"No consumer callback for method {method}")

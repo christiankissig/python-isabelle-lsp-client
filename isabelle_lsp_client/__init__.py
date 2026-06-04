@@ -5,6 +5,7 @@ from isabelle_lsp_client.handler import (
     TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
     WINDOW_LOGMESSAGE,
     WINDOW_SHOWMESSAGE,
+    WORKSPACE_APPLYEDIT,
 )
 from isabelle_lsp_client.isabelle import (
     command_finishes_subgoal,
@@ -15,6 +16,7 @@ from isabelle_lsp_client.isabelle import (
     is_sledgehammer_noproof,
 )
 from isabelle_lsp_client.protocol import (
+    ApplyWorkspaceEditParams,
     CaretUpdateRequest,
     Decoration,
     DecorationEntry,
@@ -28,6 +30,11 @@ from isabelle_lsp_client.protocol import (
     ProgressNodes,
     ProgressRequest,
     PublishDiagnosticsParams,
+    TextDocumentEdit,
+    TextEdit,
+    VersionedTextDocumentIdentifier,
+    WorkspaceEdit,
+    parse_apply_edit,
     parse_decoration,
     parse_dynamic_output,
     parse_progress,
@@ -42,6 +49,7 @@ from .version import version as __version__
 
 __all__ = [
     "__version__",
+    "ApplyWorkspaceEditParams",
     "CaretUpdateRequest",
     "ClientHandler",
     "Decoration",
@@ -63,14 +71,20 @@ __all__ = [
     "ProgressRequest",
     "PublishDiagnosticsParams",
     "TEXTDOCUMENT_PUBLISHDIAGNOSTICS",
+    "TextDocumentEdit",
+    "TextEdit",
+    "VersionedTextDocumentIdentifier",
     "WINDOW_LOGMESSAGE",
     "WINDOW_SHOWMESSAGE",
+    "WORKSPACE_APPLYEDIT",
+    "WorkspaceEdit",
     "command_finishes_subgoal",
     "get_command_from_document",
     "get_command_from_sledgehammer",
     "is_isabelle_ready",
     "is_sledgehammer_done",
     "is_sledgehammer_noproof",
+    "parse_apply_edit",
     "parse_decoration",
     "parse_dynamic_output",
     "parse_progress",

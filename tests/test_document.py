@@ -115,6 +115,51 @@ class TestLocalApplyChange:
         assert doc.lines[1] == "Yef"
 
 
+class TestApplyTextEdits:
+    @staticmethod
+    def _edit(sl, sc, el, ec, new_text):
+        from isabelle_lsp_client.protocol import TextEdit
+
+        return TextEdit(
+            range=Range(
+                start=Position(line=sl, character=sc),
+                end=Position(line=el, character=ec),
+            ),
+            new_text=new_text,
+        )
+
+    @pytest.mark.asyncio
+    async def test_applies_edits_and_notifies(self, mock_isabelle):
+        doc = make_doc(mock_isabelle, text="aaa\nbbb\nccc")
+        edits = [self._edit(0, 0, 0, 3, "XXX"), self._edit(2, 0, 2, 3, "ZZZ")]
+
+        await doc.apply_text_edits(edits)
+
+        assert doc.lines == ["XXX", "bbb", "ZZZ"]
+        mock_isabelle.lspClient.send_notification.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_edits_are_applied_bottom_up(self, mock_isabelle):
+        doc = make_doc(mock_isabelle, text="aaa\nbbb\nccc")
+        # Provide edits in top-down order; they should be applied bottom-up.
+        await doc.apply_text_edits(
+            [self._edit(0, 0, 0, 1, "x"), self._edit(2, 0, 2, 1, "z")]
+        )
+
+        notif = mock_isabelle.lspClient.send_notification.call_args[0][0]
+        lines = [c.range.start.line for c in notif.params["contentChanges"]]
+        assert lines == [2, 0]
+
+    @pytest.mark.asyncio
+    async def test_empty_edits_is_noop(self, mock_isabelle):
+        doc = make_doc(mock_isabelle, text="aaa")
+
+        await doc.apply_text_edits([])
+
+        assert doc.lines == ["aaa"]
+        mock_isabelle.lspClient.send_notification.assert_not_awaited()
+
+
 class TestGetProgress:
     def test_progress_fraction(self, mock_isabelle):
         doc = make_doc(mock_isabelle, text="a\nb\nc\nd")
