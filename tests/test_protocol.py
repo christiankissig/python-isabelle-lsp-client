@@ -3,6 +3,7 @@ from isabelle_lsp_client.protocol import (
     ProgressRequest,
     WorkDoneProgressBegin,
     WorkDoneProgressCancelNotification,
+    WorkDoneProgressCancelParams,
     WorkDoneProgressEnd,
     WorkDoneProgressReport,
     parse_work_done_progress,
@@ -73,7 +74,9 @@ def test_parse_work_done_progress_ignores_unknown_payload():
 
 
 def test_work_done_progress_cancel_notification():
-    notification = WorkDoneProgressCancelNotification(token="abc")
+    notification = WorkDoneProgressCancelNotification(
+        params=WorkDoneProgressCancelParams(token="abc")
+    )
 
     assert notification.model_dump(exclude_none=True) == {
         "jsonrpc": "2.0",

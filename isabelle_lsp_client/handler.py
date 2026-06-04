@@ -3,6 +3,9 @@ import time
 from collections import defaultdict
 from typing import Any, Callable
 
+from lsp_client import InitializeResult
+from pydantic import ValidationError
+
 from isabelle_lsp_client.document import Document
 from isabelle_lsp_client.protocol import (
     PROGRESS,
@@ -35,6 +38,9 @@ class ClientHandler:
     # Latest work done progress state, keyed by progress token. Entries are
     # added on a `begin` notification and removed on `end`.
     progress: dict[ProgressToken, WorkDoneProgress]
+    # Server capabilities advertised in the `initialize` response, captured the
+    # first time a response carrying an `InitializeResult` payload arrives.
+    initialize_result: InitializeResult | None
 
     def __init__(self) -> None:
         self.document = None
@@ -43,6 +49,7 @@ class ClientHandler:
         self.on_timeout_callbacks = []
         self.callbacks = defaultdict(list)
         self.progress = {}
+        self.initialize_result = None
 
     def add_document(self, document: Document) -> None:
         self.documents[document.uri] = document
@@ -84,6 +91,23 @@ class ClientHandler:
     async def on_start(self, **kwargs: Any) -> None:
         for callback in self.on_start_callbacks:
             await callback(self.document, **kwargs)
+
+    def _capture_initialize_result(self, result: Any) -> None:
+        """
+        Store the server's ``InitializeResult`` the first time the response to
+        the ``initialize`` request arrives. Responses are dispatched here
+        asynchronously, so the result is recognised by its ``capabilities``
+        field rather than by correlating the request id. Other request results
+        and malformed payloads are ignored.
+        """
+        if self.initialize_result is not None:
+            return
+        if not isinstance(result, dict) or "capabilities" not in result:
+            return
+        try:
+            self.initialize_result = InitializeResult.model_validate(result)
+        except ValidationError as e:
+            logger.warning("Could not parse initialize result: %s", e)
 
     def _track_progress(self, response: dict[Any, Any]) -> None:
         """
@@ -127,6 +151,7 @@ class ClientHandler:
                     response["id"],
                     response.get("result"),
                 )
+                self._capture_initialize_result(response.get("result"))
             return
         else:
             logger.warning("Unrecognised message shape: %s", response)

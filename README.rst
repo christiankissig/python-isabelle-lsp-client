@@ -2,6 +2,14 @@
    :target: https://github.com/christiankissig/python-isabelle-lsp-client/actions/workflows/ci.yml
    :alt: CI/CD
 
+.. image:: https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue
+   :target: https://www.python.org/
+   :alt: Python versions
+
+.. image:: https://img.shields.io/badge/license-MIT-green
+   :target: https://github.com/christiankissig/python-isabelle-lsp-client/blob/master/LICENSE
+   :alt: License: MIT
+
 python-isabelle-lsp-client
 ==========================
 
