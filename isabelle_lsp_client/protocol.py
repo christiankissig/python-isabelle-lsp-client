@@ -1,7 +1,24 @@
-from typing import Any, Literal, Union
+"""
+Isabelle-specific LSP protocol types.
 
-from lsp_client import BaseNotification, BaseRequest
-from pydantic import BaseModel
+The ``PIDE/*`` request types are Isabelle extensions and are defined here. The
+work done progress payloads and the cancel notification are part of the LSP base
+protocol and are re-exported from :mod:`lsp_client`; only the ``WorkDoneProgress``
+union and the ``parse_work_done_progress`` helper are Isabelle-side conveniences
+layered on top of those spec types.
+"""
+
+from typing import Any, Union
+
+from lsp_client import (
+    BaseRequest,
+    ProgressToken,
+    WorkDoneProgressBegin,
+    WorkDoneProgressCancelNotification,
+    WorkDoneProgressCancelParams,
+    WorkDoneProgressEnd,
+    WorkDoneProgressReport,
+)
 
 # PIDE requests
 
@@ -30,34 +47,6 @@ PROGRESS = "$/progress"
 WORK_DONE_PROGRESS_CREATE = "window/workDoneProgress/create"
 WORK_DONE_PROGRESS_CANCEL = "window/workDoneProgress/cancel"
 
-ProgressToken = Union[int, str]
-
-
-class WorkDoneProgressBegin(BaseModel):
-    """Signals the start of a work done progress reporting."""
-
-    kind: Literal["begin"] = "begin"
-    title: str
-    cancellable: bool | None = None
-    message: str | None = None
-    percentage: int | None = None
-
-
-class WorkDoneProgressReport(BaseModel):
-    """Reports progress of an ongoing work done progress operation."""
-
-    kind: Literal["report"] = "report"
-    cancellable: bool | None = None
-    message: str | None = None
-    percentage: int | None = None
-
-
-class WorkDoneProgressEnd(BaseModel):
-    """Signals the end of a work done progress reporting."""
-
-    kind: Literal["end"] = "end"
-    message: str | None = None
-
 
 WorkDoneProgress = Union[
     WorkDoneProgressBegin, WorkDoneProgressReport, WorkDoneProgressEnd
@@ -81,13 +70,18 @@ def parse_work_done_progress(value: dict | None) -> WorkDoneProgress | None:
     return None
 
 
-class WorkDoneProgressCancelNotification(BaseNotification):
-    """
-    ``window/workDoneProgress/cancel`` — sent by the client to cancel a
-    server-initiated work done progress identified by ``token``.
-    """
-
-    def __init__(self, token: ProgressToken, **kwargs: Any) -> None:
-        super().__init__(
-            method=WORK_DONE_PROGRESS_CANCEL, params={"token": token}, **kwargs
-        )
+__all__ = [
+    "CaretUpdateRequest",
+    "ProgressRequest",
+    "PROGRESS",
+    "WORK_DONE_PROGRESS_CREATE",
+    "WORK_DONE_PROGRESS_CANCEL",
+    "ProgressToken",
+    "WorkDoneProgress",
+    "WorkDoneProgressBegin",
+    "WorkDoneProgressReport",
+    "WorkDoneProgressEnd",
+    "WorkDoneProgressCancelNotification",
+    "WorkDoneProgressCancelParams",
+    "parse_work_done_progress",
+]

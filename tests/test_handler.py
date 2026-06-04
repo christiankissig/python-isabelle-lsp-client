@@ -231,6 +231,49 @@ class TestWorkDoneProgress:
         assert cb.call_args[0][1]["id"] == 7
 
 
+class TestInitializeResult:
+    @pytest.mark.asyncio
+    async def test_initialize_response_is_captured(self, handler):
+        await handler.handle(
+            {
+                "id": 1,
+                "result": {
+                    "capabilities": {"positionEncoding": "utf-16"},
+                    "serverInfo": {"name": "Isabelle", "version": "2024"},
+                },
+            }
+        )
+
+        assert handler.initialize_result is not None
+        assert handler.initialize_result.serverInfo.name == "Isabelle"
+        assert handler.initialize_result.capabilities.positionEncoding == "utf-16"
+
+    @pytest.mark.asyncio
+    async def test_non_initialize_response_is_ignored(self, handler):
+        await handler.handle({"id": 2, "result": {"some": "other-result"}})
+
+        assert handler.initialize_result is None
+
+    @pytest.mark.asyncio
+    async def test_first_initialize_result_wins(self, handler):
+        await handler.handle(
+            {"id": 1, "result": {"capabilities": {}, "serverInfo": {"name": "first"}}}
+        )
+        await handler.handle(
+            {"id": 9, "result": {"capabilities": {}, "serverInfo": {"name": "second"}}}
+        )
+
+        assert handler.initialize_result.serverInfo.name == "first"
+
+    @pytest.mark.asyncio
+    async def test_error_response_does_not_capture(self, handler):
+        await handler.handle(
+            {"id": 1, "error": {"code": -32600, "message": "bad request"}}
+        )
+
+        assert handler.initialize_result is None
+
+
 class TestDocuments:
     def test_add_document_stores_by_uri(self, handler, mock_document):
         handler.add_document(mock_document)
