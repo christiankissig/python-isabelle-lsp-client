@@ -26,6 +26,7 @@ from isabelle_lsp_client.protocol import (
     ProgressRequest,
     ProgressToken,
     WorkDoneProgressCancelNotification,
+    WorkDoneProgressCancelParams,
 )
 
 from .version import version
@@ -134,5 +135,7 @@ class IsabelleClient(object):
         """
         logger.info(f"Cancelling workDoneProgress for token {token}")
         await self.lspClient.send_notification(
-            WorkDoneProgressCancelNotification(token=token)
+            WorkDoneProgressCancelNotification(
+                params=WorkDoneProgressCancelParams(token=token)
+            )
         )
