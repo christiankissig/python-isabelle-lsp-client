@@ -154,6 +154,7 @@ class IsabelleProcess(object):
     async def _shutdown_process(self) -> None:
         if self._process is None or self._process.returncode is not None:
             return
+        await self._graceful_lsp_shutdown()
         if self._process.stdin is not None:
             try:
                 self._process.stdin.close()
@@ -166,6 +167,31 @@ class IsabelleProcess(object):
         except asyncio.TimeoutError:
             self._process.kill()
             await self._process.wait()
+
+    async def _graceful_lsp_shutdown(self) -> None:
+        """
+        Best-effort LSP shutdown handshake before terminating the subprocess:
+        close any open documents, then send ``shutdown`` and ``exit``. The
+        response to ``shutdown`` is not awaited (the read loop has stopped by
+        now). Any failure — e.g. the server already gone — is logged and ignored;
+        the caller terminates the process regardless.
+        """
+        isaClient = getattr(self, "isaClient", None)
+        if isaClient is None:
+            return
+        try:
+            closed: set[str] = set()
+            documents = list(self.clientHandler.documents.values())
+            if self.clientHandler.document is not None:
+                documents.append(self.clientHandler.document)
+            for document in documents:
+                if document.uri not in closed:
+                    closed.add(document.uri)
+                    await document.close_file()
+            await isaClient.shutdown()
+            await isaClient.exit()
+        except Exception as e:
+            logger.debug("Graceful LSP shutdown failed; terminating: %s", e)
 
     async def update_status(
         self, _document: Document, response: dict, _timestamp: str
