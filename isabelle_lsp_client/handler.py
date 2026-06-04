@@ -12,12 +12,14 @@ from isabelle_lsp_client.protocol import (
     WORK_DONE_PROGRESS_CREATE,
     DecorationParams,
     DynamicOutput,
+    ProgressNodes,
     ProgressToken,
     WorkDoneProgress,
     WorkDoneProgressBegin,
     WorkDoneProgressEnd,
     parse_decoration,
     parse_dynamic_output,
+    parse_progress,
     parse_work_done_progress,
 )
 
@@ -26,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 PIDE_DECORATION = "PIDE/decoration"
 PIDE_DYNAMIC_OUTPUT = "PIDE/dynamic_output"
+PIDE_PROGRESS = "PIDE/progress"
 WINDOW_LOGMESSAGE = "window/logMessage"
 WINDOW_SHOWMESSAGE = "window/showMessage"
 
@@ -51,6 +54,9 @@ class ClientHandler:
     # Latest PIDE/decoration payload (typed markup for the main document), parsed
     # on each notification that targets the main document.
     decorations: DecorationParams | None
+    # Latest PIDE/progress payload (per-theory-node processing status). Each
+    # message is a full snapshot, so this holds the most recent one.
+    progress_nodes: ProgressNodes | None
 
     def __init__(self) -> None:
         self.document = None
@@ -62,6 +68,7 @@ class ClientHandler:
         self.initialize_result = None
         self.dynamic_output = None
         self.decorations = None
+        self.progress_nodes = None
 
     def add_document(self, document: Document) -> None:
         self.documents[document.uri] = document
@@ -87,6 +94,14 @@ class ClientHandler:
     def register_on_progress(self, handler_method: Callable) -> None:
         """Register a callback for ``$/progress`` notifications."""
         self.callbacks[PROGRESS].append(handler_method)
+
+    def register_on_pide_progress(self, handler_method: Callable) -> None:
+        """
+        Register a callback for ``PIDE/progress`` notifications (per-theory-node
+        processing status). Distinct from :meth:`register_on_progress`, which is
+        for the LSP ``$/progress`` work-done progress.
+        """
+        self.callbacks[PIDE_PROGRESS].append(handler_method)
 
     def register_on_work_done_progress_create(self, handler_method: Callable) -> None:
         """Register a callback for ``window/workDoneProgress/create`` requests."""
@@ -163,6 +178,16 @@ class ClientHandler:
         except ValidationError as e:
             logger.warning("Could not parse decoration: %s", e)
 
+    def _track_progress_nodes(self, response: dict[Any, Any]) -> None:
+        """
+        Parse and store the latest ``PIDE/progress`` snapshot. A malformed
+        payload leaves the previous value in place.
+        """
+        try:
+            self.progress_nodes = parse_progress(response.get("params"))
+        except ValidationError as e:
+            logger.warning("Could not parse progress: %s", e)
+
     async def handle(self, response: dict[Any, Any]) -> None:
         DOCUMENT_REQUIRED = {PIDE_DECORATION, PIDE_DYNAMIC_OUTPUT}
         DOCUMENT_EXACT = {PIDE_DECORATION}
@@ -210,14 +235,17 @@ class ClientHandler:
             # Reached only after the DOCUMENT_EXACT uri check above, so this
             # decoration targets the main document.
             self._track_decoration(response)
+        elif method == PIDE_PROGRESS:
+            self._track_progress_nodes(response)
 
         if self.callbacks.get(method):
             logger.info(f"Handling response for method {method}")
             for callback in self.callbacks[method]:
                 await callback(self.document, response, timestamp)
-        elif method in (PROGRESS, WORK_DONE_PROGRESS_CREATE):
-            # Known work done progress methods are handled internally even
-            # without a consumer callback registered.
+        elif method in (PROGRESS, WORK_DONE_PROGRESS_CREATE, PIDE_PROGRESS):
+            # Known methods handled internally even without a consumer callback;
+            # PIDE/progress is high-frequency, so a missing callback is not a
+            # warning.
             logger.debug(f"No consumer callback for method {method}")
         else:
             logger.warning(f"Unhandled response for method {method}")

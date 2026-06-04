@@ -1,6 +1,7 @@
 from isabelle_lsp_client.handler import (
     PIDE_DECORATION,
     PIDE_DYNAMIC_OUTPUT,
+    PIDE_PROGRESS,
     WINDOW_LOGMESSAGE,
     WINDOW_SHOWMESSAGE,
 )
@@ -20,9 +21,12 @@ from isabelle_lsp_client.protocol import (
     DecorationRange,
     DynamicOutput,
     DynamicOutputDecoration,
+    NodeStatus,
+    ProgressNodes,
     ProgressRequest,
     parse_decoration,
     parse_dynamic_output,
+    parse_progress,
 )
 
 from .client import IsabelleClient
@@ -44,8 +48,11 @@ __all__ = [
     "DynamicOutputDecoration",
     "IsabelleClient",
     "IsabelleProcess",
+    "NodeStatus",
     "PIDE_DECORATION",
     "PIDE_DYNAMIC_OUTPUT",
+    "PIDE_PROGRESS",
+    "ProgressNodes",
     "ProgressRequest",
     "WINDOW_LOGMESSAGE",
     "WINDOW_SHOWMESSAGE",
@@ -57,4 +64,5 @@ __all__ = [
     "is_sledgehammer_noproof",
     "parse_decoration",
     "parse_dynamic_output",
+    "parse_progress",
 ]
