@@ -114,7 +114,7 @@ class IsabelleClient(object):
         await self.lspClient.send_request(CaretUpdateRequest(uri, line, character))
 
     async def progress_request(self) -> None:
-        await self.lspClient.send_request(ProgressRequest())
+        await self.lspClient.send_notification(ProgressRequest())
 
     async def acknowledge_work_done_progress_create(self, request_id: int) -> None:
         """

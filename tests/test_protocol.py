@@ -62,11 +62,11 @@ def test_caret_update_request():
 
 
 def test_progress_request():
-    request = ProgressRequest(id=1)
+    # PIDE/progress_request is a notification: no id, no params.
+    request = ProgressRequest()
 
     assert request.model_dump(exclude_none=True) == {
         "jsonrpc": "2.0",
-        "id": 1,
         "method": "PIDE/progress_request",
     }
 
