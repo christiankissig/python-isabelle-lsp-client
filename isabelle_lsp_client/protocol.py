@@ -349,6 +349,78 @@ def parse_publish_diagnostics(params: dict | None) -> PublishDiagnosticsParams |
     return PublishDiagnosticsParams.model_validate(params)
 
 
+# Apply workspace edit
+# https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_applyEdit
+#
+# `workspace/applyEdit` is a server -> client request asking the client to apply
+# edits to its documents (Isabelle uses it e.g. for code-action insertions). The
+# isabelle-emacs server sends it with an empty id (`Id.empty`), so it does not
+# await a response. The `params` shape is:
+#
+#   {"edit": {"documentChanges": [
+#       {"textDocument": {"uri": "...", "version": N},
+#        "edits": [{"range": <Range>, "newText": "..."}, ...]},
+#       ...]}}
+
+
+class TextEdit(BaseModel):
+    """A single edit: replace ``range`` with ``new_text`` (wire key ``newText``)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    range: Range
+    new_text: str = Field(alias="newText")
+
+
+class VersionedTextDocumentIdentifier(BaseModel):
+    """The document an edit targets, with its (optional) version."""
+
+    uri: str
+    version: int | None = None
+
+
+class TextDocumentEdit(BaseModel):
+    """An ordered set of :class:`TextEdit`s for a single document."""
+
+    textDocument: VersionedTextDocumentIdentifier
+    edits: list[TextEdit] = Field(default_factory=list)
+
+    @property
+    def uri(self) -> str:
+        return self.textDocument.uri
+
+
+class WorkspaceEdit(BaseModel):
+    """
+    A workspace edit. Only ``documentChanges`` is modelled (what Isabelle
+    sends); the older ``changes`` map form is not used by the server.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    document_changes: list[TextDocumentEdit] = Field(
+        default_factory=list, alias="documentChanges"
+    )
+
+
+class ApplyWorkspaceEditParams(BaseModel):
+    """Payload of a ``workspace/applyEdit`` request."""
+
+    edit: WorkspaceEdit
+    label: str | None = None
+
+
+def parse_apply_edit(params: dict | None) -> ApplyWorkspaceEditParams | None:
+    """
+    Parse the ``params`` of a ``workspace/applyEdit`` request into a typed
+    :class:`ApplyWorkspaceEditParams`, or ``None`` if there is no payload.
+    Document-change and edit order are preserved.
+    """
+    if params is None:
+        return None
+    return ApplyWorkspaceEditParams.model_validate(params)
+
+
 __all__ = [
     "CaretUpdateRequest",
     "ProgressRequest",
@@ -378,4 +450,10 @@ __all__ = [
     "DiagnosticSeverity",
     "PublishDiagnosticsParams",
     "parse_publish_diagnostics",
+    "TextEdit",
+    "VersionedTextDocumentIdentifier",
+    "TextDocumentEdit",
+    "WorkspaceEdit",
+    "ApplyWorkspaceEditParams",
+    "parse_apply_edit",
 ]

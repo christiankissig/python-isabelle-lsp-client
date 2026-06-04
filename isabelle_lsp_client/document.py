@@ -3,6 +3,7 @@ import logging
 from lsp_client import ContentChange, TextDocumentDidChangeNotification
 
 from .client import IsabelleClient
+from .protocol import TextEdit
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,24 @@ class Document:
         """
         self.local_apply_changes(changes)
         await self.isabelle_apply_changes(changes)
+
+    async def apply_text_edits(self, edits: list[TextEdit]) -> None:
+        """
+        Applies LSP ``TextEdit``s (e.g. from ``workspace/applyEdit``) to this
+        document. Edits are applied bottom-up (highest position first) so that
+        applying one does not shift the positions of the others.
+        """
+        if not edits:
+            return
+        ordered = sorted(
+            edits,
+            key=lambda e: (e.range.start.line, e.range.start.character),
+            reverse=True,
+        )
+        changes = [
+            ContentChange(range=edit.range, text=edit.new_text) for edit in ordered
+        ]
+        await self.apply_changes(changes)
 
     def get_progress(self, line: int) -> float:
         """

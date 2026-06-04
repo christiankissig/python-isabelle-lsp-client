@@ -8,16 +8,19 @@ from isabelle_lsp_client.handler import (
     PIDE_PROGRESS,
     TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
     WINDOW_LOGMESSAGE,
+    WORKSPACE_APPLYEDIT,
     ClientHandler,
 )
 from isabelle_lsp_client.protocol import (
     PROGRESS,
     WORK_DONE_PROGRESS_CREATE,
+    ApplyWorkspaceEditParams,
     DecorationParams,
     DynamicOutput,
     ProgressNodes,
     WorkDoneProgressBegin,
     WorkDoneProgressReport,
+    parse_apply_edit,
 )
 
 
@@ -514,6 +517,104 @@ class TestPublishDiagnostics:
             await handler.handle(_diagnostics("file:///A.thy", 1))
 
         assert not any("Unhandled" in r.message for r in caplog.records)
+
+
+_APPLY_EDIT = {
+    "edit": {
+        "documentChanges": [
+            {
+                "textDocument": {"uri": "file:///A.thy", "version": 2},
+                "edits": [
+                    {
+                        "range": {
+                            "start": {"line": 1, "character": 0},
+                            "end": {"line": 1, "character": 3},
+                        },
+                        "newText": "by",
+                    }
+                ],
+            }
+        ]
+    }
+}
+
+
+class TestApplyEdit:
+    @pytest.mark.asyncio
+    async def test_apply_edit_is_parsed_and_tracked(self, handler):
+        await handler.handle({"method": WORKSPACE_APPLYEDIT, "params": _APPLY_EDIT})
+
+        assert isinstance(handler.last_apply_edit, ApplyWorkspaceEditParams)
+        change = handler.last_apply_edit.edit.document_changes[0]
+        assert change.uri == "file:///A.thy"
+        assert change.edits[0].new_text == "by"
+
+    @pytest.mark.asyncio
+    async def test_apply_edit_callback_receives_raw_response(self, handler):
+        cb = AsyncMock()
+        handler.register_on_apply_edit(cb)
+
+        await handler.handle({"method": WORKSPACE_APPLYEDIT, "params": _APPLY_EDIT})
+
+        cb.assert_awaited_once()
+        assert cb.call_args[0][1]["params"] == _APPLY_EDIT
+
+    @pytest.mark.asyncio
+    async def test_apply_edit_without_callback_does_not_warn(self, handler, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            await handler.handle({"method": WORKSPACE_APPLYEDIT, "params": _APPLY_EDIT})
+
+        assert not any("Unhandled" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_malformed_apply_edit_keeps_previous(self, handler):
+        await handler.handle({"method": WORKSPACE_APPLYEDIT, "params": _APPLY_EDIT})
+        # `edit` is required; a payload without it must not clobber the value.
+        await handler.handle({"method": WORKSPACE_APPLYEDIT, "params": {}})
+
+        assert handler.last_apply_edit is not None
+
+    @pytest.mark.asyncio
+    async def test_apply_workspace_edit_routes_to_matching_document(self, handler):
+        doc = MagicMock()
+        doc.uri = "file:///A.thy"
+        doc.apply_text_edits = AsyncMock()
+        handler.set_document(doc)
+
+        edit = parse_apply_edit(_APPLY_EDIT).edit
+        await handler.apply_workspace_edit(edit)
+
+        doc.apply_text_edits.assert_awaited_once()
+        applied = doc.apply_text_edits.call_args[0][0]
+        assert applied[0].new_text == "by"
+
+    @pytest.mark.asyncio
+    async def test_apply_workspace_edit_routes_to_added_document(self, handler):
+        doc = MagicMock()
+        doc.uri = "file:///A.thy"
+        doc.apply_text_edits = AsyncMock()
+        handler.add_document(doc)
+
+        await handler.apply_workspace_edit(parse_apply_edit(_APPLY_EDIT).edit)
+
+        doc.apply_text_edits.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_workspace_edit_skips_unknown_uri(self, handler, caplog):
+        import logging
+
+        other = MagicMock()
+        other.uri = "file:///Other.thy"
+        other.apply_text_edits = AsyncMock()
+        handler.set_document(other)
+
+        with caplog.at_level(logging.WARNING):
+            await handler.apply_workspace_edit(parse_apply_edit(_APPLY_EDIT).edit)
+
+        other.apply_text_edits.assert_not_awaited()
+        assert any("unknown document" in r.message for r in caplog.records)
 
 
 class TestInitializeResult:

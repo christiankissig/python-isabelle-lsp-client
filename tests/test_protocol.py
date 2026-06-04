@@ -1,6 +1,7 @@
 import pytest
 
 from isabelle_lsp_client.protocol import (
+    ApplyWorkspaceEditParams,
     CaretUpdateRequest,
     Decoration,
     DecorationParams,
@@ -17,6 +18,7 @@ from isabelle_lsp_client.protocol import (
     WorkDoneProgressCancelParams,
     WorkDoneProgressEnd,
     WorkDoneProgressReport,
+    parse_apply_edit,
     parse_decoration,
     parse_dynamic_output,
     parse_progress,
@@ -366,3 +368,84 @@ def test_parse_publish_diagnostics_defaults_and_none():
     # A cleared document publishes an empty diagnostics list.
     published = parse_publish_diagnostics({"uri": "file:///x.thy"})
     assert published.diagnostics == []
+
+
+# A workspace/applyEdit payload following the isabelle-emacs lsp.scala shape.
+APPLY_EDIT_SAMPLE = {
+    "edit": {
+        "documentChanges": [
+            {
+                "textDocument": {"uri": "file:///A.thy", "version": 3},
+                "edits": [
+                    {
+                        "range": {
+                            "start": {"line": 2, "character": 0},
+                            "end": {"line": 2, "character": 5},
+                        },
+                        "newText": "lemma",
+                    },
+                    {
+                        "range": {
+                            "start": {"line": 5, "character": 0},
+                            "end": {"line": 5, "character": 0},
+                        },
+                        "newText": "\ndone",
+                    },
+                ],
+            }
+        ]
+    }
+}
+
+
+def test_parse_apply_edit_full_payload():
+    parsed = parse_apply_edit(APPLY_EDIT_SAMPLE)
+
+    assert isinstance(parsed, ApplyWorkspaceEditParams)
+    change = parsed.edit.document_changes[0]
+    assert change.uri == "file:///A.thy"
+    assert change.textDocument.version == 3
+    first = change.edits[0]
+    assert first.new_text == "lemma"  # decoded from the camelCase wire key
+    assert (first.range.start.line, first.range.end.character) == (2, 5)
+
+
+def test_parse_apply_edit_preserves_edit_order():
+    parsed = parse_apply_edit(APPLY_EDIT_SAMPLE)
+    edits = parsed.edit.document_changes[0].edits
+    assert [e.range.start.line for e in edits] == [2, 5]
+
+
+def test_apply_workspace_edit_params_populate_by_field_name():
+    from isabelle_lsp_client.protocol import (
+        TextDocumentEdit,
+        TextEdit,
+        VersionedTextDocumentIdentifier,
+        WorkspaceEdit,
+    )
+    from lsp_client import Position, Range
+
+    edit = WorkspaceEdit(
+        document_changes=[
+            TextDocumentEdit(
+                textDocument=VersionedTextDocumentIdentifier(uri="file:///A.thy"),
+                edits=[
+                    TextEdit(
+                        range=Range(
+                            start=Position(line=0, character=0),
+                            end=Position(line=0, character=1),
+                        ),
+                        new_text="x",
+                    )
+                ],
+            )
+        ]
+    )
+    assert edit.document_changes[0].edits[0].new_text == "x"
+
+
+def test_parse_apply_edit_defaults_and_none():
+    assert parse_apply_edit(None) is None
+    # documentChanges is optional.
+    parsed = parse_apply_edit({"edit": {}})
+    assert parsed.edit.document_changes == []
