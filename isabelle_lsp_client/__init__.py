@@ -12,7 +12,15 @@ from isabelle_lsp_client.isabelle import (
     is_sledgehammer_done,
     is_sledgehammer_noproof,
 )
-from isabelle_lsp_client.protocol import CaretUpdateRequest, ProgressRequest
+from isabelle_lsp_client.protocol import (
+    CaretUpdateRequest,
+    DecorationEntry,
+    DecorationRange,
+    DynamicOutput,
+    DynamicOutputDecoration,
+    ProgressRequest,
+    parse_dynamic_output,
+)
 
 from .client import IsabelleClient
 from .document import Document
@@ -24,7 +32,11 @@ __all__ = [
     "__version__",
     "CaretUpdateRequest",
     "ClientHandler",
+    "DecorationEntry",
+    "DecorationRange",
     "Document",
+    "DynamicOutput",
+    "DynamicOutputDecoration",
     "IsabelleClient",
     "IsabelleProcess",
     "PIDE_DECORATION",
@@ -38,4 +50,5 @@ __all__ = [
     "is_isabelle_ready",
     "is_sledgehammer_done",
     "is_sledgehammer_noproof",
+    "parse_dynamic_output",
 ]

@@ -4,12 +4,14 @@ import pytest
 
 from isabelle_lsp_client.handler import (
     PIDE_DECORATION,
+    PIDE_DYNAMIC_OUTPUT,
     WINDOW_LOGMESSAGE,
     ClientHandler,
 )
 from isabelle_lsp_client.protocol import (
     PROGRESS,
     WORK_DONE_PROGRESS_CREATE,
+    DynamicOutput,
     WorkDoneProgressBegin,
     WorkDoneProgressReport,
 )
@@ -229,6 +231,69 @@ class TestWorkDoneProgress:
 
         cb.assert_awaited_once()
         assert cb.call_args[0][1]["id"] == 7
+
+
+class TestDynamicOutput:
+    @pytest.mark.asyncio
+    async def test_dynamic_output_is_parsed_and_tracked(self, handler, mock_document):
+        handler.set_document(mock_document)
+
+        await handler.handle(
+            {
+                "method": PIDE_DYNAMIC_OUTPUT,
+                "params": {
+                    "content": "goal (1 subgoal):",
+                    "decorations": [
+                        {"type": "text_keyword1", "content": [{"range": [0, 0, 0, 4]}]}
+                    ],
+                },
+            }
+        )
+
+        assert isinstance(handler.dynamic_output, DynamicOutput)
+        assert handler.dynamic_output.content == "goal (1 subgoal):"
+        assert handler.dynamic_output.decorations[0].type == "text_keyword1"
+
+    @pytest.mark.asyncio
+    async def test_dynamic_output_callback_still_receives_raw_response(
+        self, handler, mock_document
+    ):
+        handler.set_document(mock_document)
+        cb = AsyncMock()
+        handler.register_on_dynamic_output(cb)
+
+        await handler.handle(
+            {"method": PIDE_DYNAMIC_OUTPUT, "params": {"content": "x"}}
+        )
+
+        cb.assert_awaited_once()
+        # The callback contract is unchanged: raw dict, not the parsed model.
+        assert cb.call_args[0][1]["params"]["content"] == "x"
+
+    @pytest.mark.asyncio
+    async def test_dynamic_output_requires_document(self, handler):
+        with pytest.raises(Exception, match="document not set"):
+            await handler.handle(
+                {"method": PIDE_DYNAMIC_OUTPUT, "params": {"content": "x"}}
+            )
+
+    @pytest.mark.asyncio
+    async def test_malformed_dynamic_output_keeps_previous(
+        self, handler, mock_document
+    ):
+        handler.set_document(mock_document)
+        await handler.handle(
+            {"method": PIDE_DYNAMIC_OUTPUT, "params": {"content": "first"}}
+        )
+        # decorations of the wrong shape must not clobber the tracked value.
+        await handler.handle(
+            {
+                "method": PIDE_DYNAMIC_OUTPUT,
+                "params": {"content": "second", "decorations": [{"range": [0, 0]}]},
+            }
+        )
+
+        assert handler.dynamic_output.content == "first"
 
 
 class TestInitializeResult:
