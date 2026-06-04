@@ -10,11 +10,13 @@ from isabelle_lsp_client.document import Document
 from isabelle_lsp_client.protocol import (
     PROGRESS,
     WORK_DONE_PROGRESS_CREATE,
+    DecorationParams,
     DynamicOutput,
     ProgressToken,
     WorkDoneProgress,
     WorkDoneProgressBegin,
     WorkDoneProgressEnd,
+    parse_decoration,
     parse_dynamic_output,
     parse_work_done_progress,
 )
@@ -46,6 +48,9 @@ class ClientHandler:
     # Latest PIDE/dynamic_output payload (proof state / output-panel text at the
     # caret), parsed on each notification.
     dynamic_output: DynamicOutput | None
+    # Latest PIDE/decoration payload (typed markup for the main document), parsed
+    # on each notification that targets the main document.
+    decorations: DecorationParams | None
 
     def __init__(self) -> None:
         self.document = None
@@ -56,6 +61,7 @@ class ClientHandler:
         self.progress = {}
         self.initialize_result = None
         self.dynamic_output = None
+        self.decorations = None
 
     def add_document(self, document: Document) -> None:
         self.documents[document.uri] = document
@@ -147,6 +153,16 @@ class ClientHandler:
         except ValidationError as e:
             logger.warning("Could not parse dynamic output: %s", e)
 
+    def _track_decoration(self, response: dict[Any, Any]) -> None:
+        """
+        Parse and store the latest ``PIDE/decoration`` payload for the main
+        document. A malformed payload leaves the previous value in place.
+        """
+        try:
+            self.decorations = parse_decoration(response.get("params"))
+        except ValidationError as e:
+            logger.warning("Could not parse decoration: %s", e)
+
     async def handle(self, response: dict[Any, Any]) -> None:
         DOCUMENT_REQUIRED = {PIDE_DECORATION, PIDE_DYNAMIC_OUTPUT}
         DOCUMENT_EXACT = {PIDE_DECORATION}
@@ -190,6 +206,10 @@ class ClientHandler:
             self._track_progress(response)
         elif method == PIDE_DYNAMIC_OUTPUT:
             self._track_dynamic_output(response)
+        elif method == PIDE_DECORATION:
+            # Reached only after the DOCUMENT_EXACT uri check above, so this
+            # decoration targets the main document.
+            self._track_decoration(response)
 
         if self.callbacks.get(method):
             logger.info(f"Handling response for method {method}")

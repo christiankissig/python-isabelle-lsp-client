@@ -11,6 +11,7 @@ from isabelle_lsp_client.handler import (
 from isabelle_lsp_client.protocol import (
     PROGRESS,
     WORK_DONE_PROGRESS_CREATE,
+    DecorationParams,
     DynamicOutput,
     WorkDoneProgressBegin,
     WorkDoneProgressReport,
@@ -294,6 +295,66 @@ class TestDynamicOutput:
         )
 
         assert handler.dynamic_output.content == "first"
+
+
+class TestDecorationTracking:
+    @pytest.mark.asyncio
+    async def test_decoration_is_parsed_and_tracked(self, handler, mock_document):
+        handler.set_document(mock_document)
+
+        await handler.handle(
+            {
+                "method": PIDE_DECORATION,
+                "params": {
+                    "uri": mock_document.uri,
+                    "entries": [
+                        {"type": "text_keyword1", "content": [{"range": [0, 0, 0, 6]}]}
+                    ],
+                },
+            }
+        )
+
+        assert isinstance(handler.decorations, DecorationParams)
+        assert handler.decorations.uri == mock_document.uri
+        assert handler.decorations.entries[0].type == "text_keyword1"
+
+    @pytest.mark.asyncio
+    async def test_decoration_for_other_document_not_tracked(
+        self, handler, mock_document
+    ):
+        handler.set_document(mock_document)
+
+        await handler.handle(
+            {
+                "method": PIDE_DECORATION,
+                "params": {"uri": "file:///other.thy", "entries": []},
+            }
+        )
+
+        # Decorations for a non-main document are dropped before tracking.
+        assert handler.decorations is None
+
+    @pytest.mark.asyncio
+    async def test_malformed_decoration_keeps_previous(self, handler, mock_document):
+        handler.set_document(mock_document)
+        await handler.handle(
+            {
+                "method": PIDE_DECORATION,
+                "params": {
+                    "uri": mock_document.uri,
+                    "entries": [{"type": "first", "content": []}],
+                },
+            }
+        )
+        # An entry missing the required `type` must not clobber the tracked value.
+        await handler.handle(
+            {
+                "method": PIDE_DECORATION,
+                "params": {"uri": mock_document.uri, "entries": [{"content": []}]},
+            }
+        )
+
+        assert handler.decorations.entries[0].type == "first"
 
 
 class TestInitializeResult:
