@@ -15,6 +15,7 @@ fork's VSCode server. The models here mirror the observed wire format.
 from typing import Any, Union
 
 from lsp_client import (
+    BaseNotification,
     BaseRequest,
     Diagnostic,
     DiagnosticSeverity,
@@ -39,9 +40,14 @@ class CaretUpdateRequest(BaseRequest):
         super().__init__(method=method, params=params, **kwargs)
 
 
-class ProgressRequest(BaseRequest):
+class ProgressRequest(BaseNotification):
     """
-    Request to update progress of a task.
+    ``PIDE/progress_request`` — asks Isabelle to start emitting ``PIDE/progress``
+    updates.
+
+    Despite the ``_request`` suffix in the method name, this is a JSON-RPC
+    notification: the server reacts by pushing ``PIDE/progress`` notifications
+    rather than returning a response, so it carries no ``id`` and no params.
     """
 
     def __init__(self, **kwargs: Any) -> None:
