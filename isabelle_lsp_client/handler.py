@@ -11,6 +11,7 @@ from isabelle_lsp_client.protocol import (
     PROGRESS,
     WORK_DONE_PROGRESS_CREATE,
     DecorationParams,
+    Diagnostic,
     DynamicOutput,
     ProgressNodes,
     ProgressToken,
@@ -20,6 +21,7 @@ from isabelle_lsp_client.protocol import (
     parse_decoration,
     parse_dynamic_output,
     parse_progress,
+    parse_publish_diagnostics,
     parse_work_done_progress,
 )
 
@@ -29,6 +31,7 @@ logger = logging.getLogger(__name__)
 PIDE_DECORATION = "PIDE/decoration"
 PIDE_DYNAMIC_OUTPUT = "PIDE/dynamic_output"
 PIDE_PROGRESS = "PIDE/progress"
+TEXTDOCUMENT_PUBLISHDIAGNOSTICS = "textDocument/publishDiagnostics"
 WINDOW_LOGMESSAGE = "window/logMessage"
 WINDOW_SHOWMESSAGE = "window/showMessage"
 
@@ -57,6 +60,10 @@ class ClientHandler:
     # Latest PIDE/progress payload (per-theory-node processing status). Each
     # message is a full snapshot, so this holds the most recent one.
     progress_nodes: ProgressNodes | None
+    # Latest published diagnostics per document URI. textDocument/publishDiagnostics
+    # replaces all diagnostics for a URI, so each entry is the current full set
+    # (in publication order). Covers imported theories, not just the main one.
+    diagnostics: dict[str, list[Diagnostic]]
 
     def __init__(self) -> None:
         self.document = None
@@ -69,6 +76,7 @@ class ClientHandler:
         self.dynamic_output = None
         self.decorations = None
         self.progress_nodes = None
+        self.diagnostics = {}
 
     def add_document(self, document: Document) -> None:
         self.documents[document.uri] = document
@@ -102,6 +110,14 @@ class ClientHandler:
         for the LSP ``$/progress`` work-done progress.
         """
         self.callbacks[PIDE_PROGRESS].append(handler_method)
+
+    def register_on_publish_diagnostics(self, handler_method: Callable) -> None:
+        """
+        Register a callback for ``textDocument/publishDiagnostics`` notifications
+        (theory errors and warnings). Callbacks fire in registration order, each
+        after :attr:`diagnostics` has been updated for the notification's URI.
+        """
+        self.callbacks[TEXTDOCUMENT_PUBLISHDIAGNOSTICS].append(handler_method)
 
     def register_on_work_done_progress_create(self, handler_method: Callable) -> None:
         """Register a callback for ``window/workDoneProgress/create`` requests."""
@@ -188,6 +204,20 @@ class ClientHandler:
         except ValidationError as e:
             logger.warning("Could not parse progress: %s", e)
 
+    def _track_diagnostics(self, response: dict[Any, Any]) -> None:
+        """
+        Parse a ``textDocument/publishDiagnostics`` notification and store its
+        diagnostics under the document URI, replacing any previous set. A
+        malformed payload leaves the previous value in place.
+        """
+        try:
+            published = parse_publish_diagnostics(response.get("params"))
+        except ValidationError as e:
+            logger.warning("Could not parse diagnostics: %s", e)
+            return
+        if published is not None:
+            self.diagnostics[published.uri] = published.diagnostics
+
     async def handle(self, response: dict[Any, Any]) -> None:
         DOCUMENT_REQUIRED = {PIDE_DECORATION, PIDE_DYNAMIC_OUTPUT}
         DOCUMENT_EXACT = {PIDE_DECORATION}
@@ -237,15 +267,20 @@ class ClientHandler:
             self._track_decoration(response)
         elif method == PIDE_PROGRESS:
             self._track_progress_nodes(response)
+        elif method == TEXTDOCUMENT_PUBLISHDIAGNOSTICS:
+            self._track_diagnostics(response)
 
         if self.callbacks.get(method):
             logger.info(f"Handling response for method {method}")
             for callback in self.callbacks[method]:
                 await callback(self.document, response, timestamp)
-        elif method in (PROGRESS, WORK_DONE_PROGRESS_CREATE, PIDE_PROGRESS):
-            # Known methods handled internally even without a consumer callback;
-            # PIDE/progress is high-frequency, so a missing callback is not a
-            # warning.
+        elif method in (
+            PROGRESS,
+            WORK_DONE_PROGRESS_CREATE,
+            PIDE_PROGRESS,
+            TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
+        ):
+            # Known methods handled internally even without a consumer callback.
             logger.debug(f"No consumer callback for method {method}")
         else:
             logger.warning(f"Unhandled response for method {method}")

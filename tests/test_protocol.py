@@ -5,11 +5,13 @@ from isabelle_lsp_client.protocol import (
     Decoration,
     DecorationParams,
     DecorationRange,
+    DiagnosticSeverity,
     DynamicOutput,
     DynamicOutputDecoration,
     NodeStatus,
     ProgressNodes,
     ProgressRequest,
+    PublishDiagnosticsParams,
     WorkDoneProgressBegin,
     WorkDoneProgressCancelNotification,
     WorkDoneProgressCancelParams,
@@ -18,6 +20,7 @@ from isabelle_lsp_client.protocol import (
     parse_decoration,
     parse_dynamic_output,
     parse_progress,
+    parse_publish_diagnostics,
     parse_work_done_progress,
 )
 
@@ -292,3 +295,74 @@ def test_parse_progress_defaults_and_none():
     # `nodes-status` is optional; counters default to 0.
     prog = parse_progress({})
     assert prog.nodes_status == []
+
+
+# The bad-theory-import payload from issue #1 (severity set, two errors).
+PUBLISH_DIAGNOSTICS_SAMPLE = {
+    "uri": "file:///path/to/Polylog_Library.thy",
+    "diagnostics": [
+        {
+            "range": {
+                "start": {"line": 7, "character": 2},
+                "end": {"line": 7, "character": 41},
+            },
+            "message": 'Bad theory import "HOL-Complex_Analysis.Complex_Analysis"',
+            "severity": 1,
+        },
+        {
+            "range": {
+                "start": {"line": 8, "character": 2},
+                "end": {"line": 8, "character": 43},
+            },
+            "message": 'Bad theory import "Linear_Recurrences.Eulerian_Polynomials"',
+            "severity": 1,
+        },
+    ],
+}
+
+
+def test_parse_publish_diagnostics_message_severity_position():
+    published = parse_publish_diagnostics(PUBLISH_DIAGNOSTICS_SAMPLE)
+
+    assert isinstance(published, PublishDiagnosticsParams)
+    assert published.uri == "file:///path/to/Polylog_Library.thy"
+    first = published.diagnostics[0]
+    assert first.message.startswith("Bad theory import")
+    assert first.severity == DiagnosticSeverity.Error
+    assert (first.range.start.line, first.range.start.character) == (7, 2)
+
+
+def test_parse_publish_diagnostics_preserves_order():
+    published = parse_publish_diagnostics(PUBLISH_DIAGNOSTICS_SAMPLE)
+    lines = [d.range.start.line for d in published.diagnostics]
+    assert lines == [7, 8]
+
+
+def test_parse_publish_diagnostics_tolerates_isabelle_quirks():
+    # Real Isabelle diagnostics carry a spurious `jsonrpc` key and often omit
+    # `severity` even for errors.
+    published = parse_publish_diagnostics(
+        {
+            "uri": "file:///x.thy",
+            "diagnostics": [
+                {
+                    "jsonrpc": "2.0",
+                    "range": {
+                        "start": {"line": 30, "character": 145},
+                        "end": {"line": 30, "character": 167},
+                    },
+                    "message": 'Undefined fact: "wfs_2_writes_preserved"',
+                }
+            ],
+        }
+    )
+    diag = published.diagnostics[0]
+    assert diag.severity is None
+    assert diag.message.startswith("Undefined fact")
+
+
+def test_parse_publish_diagnostics_defaults_and_none():
+    assert parse_publish_diagnostics(None) is None
+    # A cleared document publishes an empty diagnostics list.
+    published = parse_publish_diagnostics({"uri": "file:///x.thy"})
+    assert published.diagnostics == []

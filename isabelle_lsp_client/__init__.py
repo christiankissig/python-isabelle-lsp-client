@@ -2,6 +2,7 @@ from isabelle_lsp_client.handler import (
     PIDE_DECORATION,
     PIDE_DYNAMIC_OUTPUT,
     PIDE_PROGRESS,
+    TEXTDOCUMENT_PUBLISHDIAGNOSTICS,
     WINDOW_LOGMESSAGE,
     WINDOW_SHOWMESSAGE,
 )
@@ -19,14 +20,18 @@ from isabelle_lsp_client.protocol import (
     DecorationEntry,
     DecorationParams,
     DecorationRange,
+    Diagnostic,
+    DiagnosticSeverity,
     DynamicOutput,
     DynamicOutputDecoration,
     NodeStatus,
     ProgressNodes,
     ProgressRequest,
+    PublishDiagnosticsParams,
     parse_decoration,
     parse_dynamic_output,
     parse_progress,
+    parse_publish_diagnostics,
 )
 
 from .client import IsabelleClient
@@ -43,6 +48,8 @@ __all__ = [
     "DecorationEntry",
     "DecorationParams",
     "DecorationRange",
+    "Diagnostic",
+    "DiagnosticSeverity",
     "Document",
     "DynamicOutput",
     "DynamicOutputDecoration",
@@ -54,6 +61,8 @@ __all__ = [
     "PIDE_PROGRESS",
     "ProgressNodes",
     "ProgressRequest",
+    "PublishDiagnosticsParams",
+    "TEXTDOCUMENT_PUBLISHDIAGNOSTICS",
     "WINDOW_LOGMESSAGE",
     "WINDOW_SHOWMESSAGE",
     "command_finishes_subgoal",
@@ -65,4 +74,5 @@ __all__ = [
     "parse_decoration",
     "parse_dynamic_output",
     "parse_progress",
+    "parse_publish_diagnostics",
 ]
