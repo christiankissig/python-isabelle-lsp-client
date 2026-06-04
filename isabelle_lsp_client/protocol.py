@@ -77,33 +77,31 @@ def parse_work_done_progress(value: dict | None) -> WorkDoneProgress | None:
     return None
 
 
-# PIDE dynamic output
-# https://github.com/m-fleury/isabelle-emacs (VSCode server: Dynamic_Output)
+# Decorations
+# https://github.com/m-fleury/isabelle-emacs (VSCode server)
 #
-# `PIDE/dynamic_output` is a server -> client notification carrying the proof
-# state / output-panel text at the current caret, together with typed markup
-# ranges over that text. The `params` shape observed on the wire is:
+# Isabelle reports typed markup as "decorations": groups of same-typed ranges.
+# The same element shape — {"type": <class>, "content": [{"range": [...]}, ...]}
+# — appears both inside `PIDE/dynamic_output` (over the output-panel text) and as
+# `PIDE/decoration` (over a source document). The models below capture that
+# shared element; the two notification payloads wrap it differently.
 #
-#   {"content": "<output text>",
-#    "decorations": [
-#       {"type": "text_keyword1",
-#        "content": [{"range": [start_line, start_char, end_line, end_char]},
-#                    ...]},
-#       ...]}
-#
-# Ranges are 0-based, half-open, and relative to `content` (NOT the source
-# document); lines are split on "\n". `content` may be empty and `decorations`
-# may be absent/empty.
+# A range is a flat [start_line, start_char, end_line, end_char] array: 0-based,
+# half-open. `type` is an Isabelle rendering class (e.g. text_keyword1,
+# text_free, background_unprocessed1, dotted_writeln, ...) drawn from a large,
+# open set, so it is kept as a plain string rather than an enum.
 
 
 class DecorationRange(BaseModel):
     """
-    A half-open ``[start, end)`` range over the dynamic-output ``content`` text.
+    A half-open ``[start, end)`` range carried by a decoration.
 
     On the wire this is a flat
     ``[start_line, start_character, end_line, end_character]`` array; it is
-    decoded into named fields here. Lines and characters are 0-based and
-    relative to the ``content`` string.
+    decoded into named fields here. Lines and characters are 0-based. The frame
+    of reference depends on the containing notification: the output-panel
+    ``content`` for ``PIDE/dynamic_output``, or the source document identified by
+    ``uri`` for ``PIDE/decoration``.
     """
 
     start_line: int
@@ -142,17 +140,35 @@ class DecorationEntry(BaseModel):
     range: DecorationRange
 
 
-class DynamicOutputDecoration(BaseModel):
+class Decoration(BaseModel):
     """
-    A group of same-typed markup spans within the dynamic-output text.
+    A group of same-typed markup spans.
 
     ``type`` is an Isabelle rendering class (e.g. ``text_keyword1``,
-    ``text_free``, ``text_bound``, ``text_var``, ``text_main``). The set is open,
-    so it is kept as a plain string rather than an enum.
+    ``text_free``, ``background_unprocessed1``); the set is open, so it is kept
+    as a plain string rather than an enum. This element is shared by
+    ``PIDE/dynamic_output`` and ``PIDE/decoration``.
     """
 
     type: str
     content: list[DecorationEntry] = Field(default_factory=list)
+
+
+# Backwards-compatible alias: the dynamic-output decorations are plain
+# :class:`Decoration` groups.
+DynamicOutputDecoration = Decoration
+
+
+# PIDE dynamic output
+#
+# `PIDE/dynamic_output` is a server -> client notification carrying the proof
+# state / output-panel text at the current caret, together with the typed markup
+# over that text. The `params` shape observed on the wire is:
+#
+#   {"content": "<output text>", "decorations": [<Decoration>, ...]}
+#
+# Decoration ranges are relative to `content` (lines split on "\n"). `content`
+# may be empty and `decorations` may be absent/empty.
 
 
 class DynamicOutput(BaseModel):
@@ -162,7 +178,7 @@ class DynamicOutput(BaseModel):
     """
 
     content: str = ""
-    decorations: list[DynamicOutputDecoration] = Field(default_factory=list)
+    decorations: list[Decoration] = Field(default_factory=list)
 
     @property
     def lines(self) -> list[str]:
@@ -178,6 +194,37 @@ def parse_dynamic_output(params: dict | None) -> DynamicOutput | None:
     if params is None:
         return None
     return DynamicOutput.model_validate(params)
+
+
+# PIDE decoration
+#
+# `PIDE/decoration` is a server -> client notification carrying the typed markup
+# for a source document. The `params` shape observed on the wire is:
+#
+#   {"uri": "file:///...", "entries": [<Decoration>, ...]}
+#
+# Decoration ranges are relative to the source document identified by `uri`.
+# A single message may carry thousands of ranges across dozens of types.
+
+
+class DecorationParams(BaseModel):
+    """
+    Payload of a ``PIDE/decoration`` notification: the typed markup for the
+    document identified by ``uri``.
+    """
+
+    uri: str
+    entries: list[Decoration] = Field(default_factory=list)
+
+
+def parse_decoration(params: dict | None) -> DecorationParams | None:
+    """
+    Parse the ``params`` of a ``PIDE/decoration`` notification into a typed
+    :class:`DecorationParams`, or ``None`` if there is no payload.
+    """
+    if params is None:
+        return None
+    return DecorationParams.model_validate(params)
 
 
 __all__ = [
@@ -196,7 +243,10 @@ __all__ = [
     "parse_work_done_progress",
     "DecorationRange",
     "DecorationEntry",
+    "Decoration",
     "DynamicOutputDecoration",
     "DynamicOutput",
     "parse_dynamic_output",
+    "DecorationParams",
+    "parse_decoration",
 ]

@@ -2,14 +2,18 @@ import pytest
 
 from isabelle_lsp_client.protocol import (
     CaretUpdateRequest,
+    Decoration,
+    DecorationParams,
     DecorationRange,
     DynamicOutput,
+    DynamicOutputDecoration,
     ProgressRequest,
     WorkDoneProgressBegin,
     WorkDoneProgressCancelNotification,
     WorkDoneProgressCancelParams,
     WorkDoneProgressEnd,
     WorkDoneProgressReport,
+    parse_decoration,
     parse_dynamic_output,
     parse_work_done_progress,
 )
@@ -161,3 +165,53 @@ def test_parse_dynamic_output_defaults_and_none():
     out = parse_dynamic_output({})
     assert out.content == ""
     assert out.decorations == []
+
+
+def test_dynamic_output_decoration_is_decoration_alias():
+    # The dynamic-output decoration element is the shared Decoration model.
+    assert DynamicOutputDecoration is Decoration
+
+
+# A real PIDE/decoration payload captured from `isabelle vscode_server`. Ranges
+# are [start_line, start_char, end_line, end_char] relative to the source
+# document identified by `uri`.
+DECORATION_SAMPLE = {
+    "uri": "file:///path/to/Theory.thy",
+    "entries": [
+        {
+            "type": "text_keyword1",
+            "content": [{"range": [0, 0, 0, 6]}, {"range": [4, 0, 4, 5]}],
+        },
+        {
+            "type": "background_unprocessed1",
+            "content": [{"range": [10, 0, 12, 3]}],
+        },
+    ],
+}
+
+
+def test_parse_decoration_full_payload():
+    deco = parse_decoration(DECORATION_SAMPLE)
+
+    assert isinstance(deco, DecorationParams)
+    assert deco.uri == "file:///path/to/Theory.thy"
+    assert [e.type for e in deco.entries] == [
+        "text_keyword1",
+        "background_unprocessed1",
+    ]
+    assert len(deco.entries[0].content) == 2
+    # A multi-line range is preserved and converts to an lsp_client.Range.
+    span = deco.entries[1].content[0].range.to_range()
+    assert (span.start.line, span.end.line) == (10, 12)
+
+
+def test_parse_decoration_defaults_and_none():
+    assert parse_decoration(None) is None
+    # `entries` is optional; `uri` is required.
+    deco = parse_decoration({"uri": "file:///x.thy"})
+    assert deco.entries == []
+
+
+def test_parse_decoration_requires_uri():
+    with pytest.raises(ValueError):
+        parse_decoration({"entries": []})
