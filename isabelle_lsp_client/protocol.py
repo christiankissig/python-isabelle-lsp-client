@@ -25,7 +25,7 @@ from lsp_client import (
     WorkDoneProgressEnd,
     WorkDoneProgressReport,
 )
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # PIDE requests
 
@@ -227,6 +227,85 @@ def parse_decoration(params: dict | None) -> DecorationParams | None:
     return DecorationParams.model_validate(params)
 
 
+# PIDE progress
+# https://github.com/m-fleury/isabelle-emacs (VSCode server: lsp.scala
+# Progress_Node / Progress_Nodes)
+#
+# `PIDE/progress` is a server -> client notification carrying a full snapshot of
+# per-theory-node processing status. The `params` shape is:
+#
+#   {"nodes-status": [
+#       {"name": "<node>", "unprocessed": int, "running": int, "warned": int,
+#        "failed": int, "finished": int, "initialized": int,
+#        "consolidated": int, "canceled": int, "terminated": int},
+#       ...]}
+#
+# The JSON key is "nodes-status" (hyphenated); it is aliased below. Each snapshot
+# lists every known node, so the latest message fully replaces prior state.
+
+
+class NodeStatus(BaseModel):
+    """
+    Processing status of a single theory node (counters over its commands and
+    node-level lifecycle flags), as reported by ``PIDE/progress``.
+    """
+
+    name: str
+    unprocessed: int = 0
+    running: int = 0
+    warned: int = 0
+    failed: int = 0
+    finished: int = 0
+    initialized: int = 0
+    consolidated: int = 0
+    canceled: int = 0
+    terminated: int = 0
+
+    @property
+    def total(self) -> int:
+        """Number of commands in the node (the five per-command counters)."""
+        return (
+            self.unprocessed + self.running + self.warned + self.failed + self.finished
+        )
+
+    @property
+    def is_finished(self) -> bool:
+        """True when nothing is pending (no unprocessed or running commands)."""
+        return self.unprocessed == 0 and self.running == 0
+
+    @property
+    def percentage(self) -> int:
+        """
+        Percent of commands no longer pending (``finished`` + ``warned`` +
+        ``failed``) over :attr:`total`; ``0`` for an empty node.
+        """
+        if self.total == 0:
+            return 0
+        done = self.finished + self.warned + self.failed
+        return round(100 * done / self.total)
+
+
+class ProgressNodes(BaseModel):
+    """
+    Payload of a ``PIDE/progress`` notification: the processing status of every
+    known theory node.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    nodes_status: list[NodeStatus] = Field(default_factory=list, alias="nodes-status")
+
+
+def parse_progress(params: dict | None) -> ProgressNodes | None:
+    """
+    Parse the ``params`` of a ``PIDE/progress`` notification into a typed
+    :class:`ProgressNodes`, or ``None`` if there is no payload.
+    """
+    if params is None:
+        return None
+    return ProgressNodes.model_validate(params)
+
+
 __all__ = [
     "CaretUpdateRequest",
     "ProgressRequest",
@@ -249,4 +328,7 @@ __all__ = [
     "parse_dynamic_output",
     "DecorationParams",
     "parse_decoration",
+    "NodeStatus",
+    "ProgressNodes",
+    "parse_progress",
 ]

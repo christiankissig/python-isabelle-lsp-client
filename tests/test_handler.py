@@ -5,6 +5,7 @@ import pytest
 from isabelle_lsp_client.handler import (
     PIDE_DECORATION,
     PIDE_DYNAMIC_OUTPUT,
+    PIDE_PROGRESS,
     WINDOW_LOGMESSAGE,
     ClientHandler,
 )
@@ -13,6 +14,7 @@ from isabelle_lsp_client.protocol import (
     WORK_DONE_PROGRESS_CREATE,
     DecorationParams,
     DynamicOutput,
+    ProgressNodes,
     WorkDoneProgressBegin,
     WorkDoneProgressReport,
 )
@@ -355,6 +357,57 @@ class TestDecorationTracking:
         )
 
         assert handler.decorations.entries[0].type == "first"
+
+
+class TestProgressNodesTracking:
+    PARAMS = {
+        "nodes-status": [
+            {"name": "Theory.thy", "unprocessed": 1, "running": 0, "finished": 3}
+        ]
+    }
+
+    @pytest.mark.asyncio
+    async def test_progress_is_parsed_and_tracked(self, handler):
+        await handler.handle({"method": PIDE_PROGRESS, "params": self.PARAMS})
+
+        assert isinstance(handler.progress_nodes, ProgressNodes)
+        assert handler.progress_nodes.nodes_status[0].name == "Theory.thy"
+        assert handler.progress_nodes.nodes_status[0].finished == 3
+
+    @pytest.mark.asyncio
+    async def test_progress_needs_no_document(self, handler):
+        # PIDE/progress is server-wide; it must not require a main document.
+        await handler.handle({"method": PIDE_PROGRESS, "params": self.PARAMS})
+        assert handler.progress_nodes is not None
+
+    @pytest.mark.asyncio
+    async def test_progress_callback_receives_raw_response(self, handler):
+        cb = AsyncMock()
+        handler.register_on_pide_progress(cb)
+
+        await handler.handle({"method": PIDE_PROGRESS, "params": self.PARAMS})
+
+        cb.assert_awaited_once()
+        assert cb.call_args[0][1]["params"] == self.PARAMS
+
+    @pytest.mark.asyncio
+    async def test_progress_without_callback_does_not_warn(self, handler, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            await handler.handle({"method": PIDE_PROGRESS, "params": self.PARAMS})
+
+        assert not any("Unhandled" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_malformed_progress_keeps_previous(self, handler):
+        await handler.handle({"method": PIDE_PROGRESS, "params": self.PARAMS})
+        # A node entry missing the required `name` must not clobber the snapshot.
+        await handler.handle(
+            {"method": PIDE_PROGRESS, "params": {"nodes-status": [{"running": 1}]}}
+        )
+
+        assert handler.progress_nodes.nodes_status[0].name == "Theory.thy"
 
 
 class TestInitializeResult:

@@ -7,6 +7,8 @@ from isabelle_lsp_client.protocol import (
     DecorationRange,
     DynamicOutput,
     DynamicOutputDecoration,
+    NodeStatus,
+    ProgressNodes,
     ProgressRequest,
     WorkDoneProgressBegin,
     WorkDoneProgressCancelNotification,
@@ -15,6 +17,7 @@ from isabelle_lsp_client.protocol import (
     WorkDoneProgressReport,
     parse_decoration,
     parse_dynamic_output,
+    parse_progress,
     parse_work_done_progress,
 )
 
@@ -215,3 +218,77 @@ def test_parse_decoration_defaults_and_none():
 def test_parse_decoration_requires_uri():
     with pytest.raises(ValueError):
         parse_decoration({"entries": []})
+
+
+# A PIDE/progress payload following the isabelle-emacs lsp.scala shape. Note the
+# hyphenated `nodes-status` key.
+PROGRESS_SAMPLE = {
+    "nodes-status": [
+        {
+            "name": "Theory.thy",
+            "unprocessed": 2,
+            "running": 1,
+            "warned": 0,
+            "failed": 0,
+            "finished": 7,
+            "initialized": 1,
+            "consolidated": 0,
+            "canceled": 0,
+            "terminated": 0,
+        },
+        {
+            "name": "Other.thy",
+            "unprocessed": 0,
+            "running": 0,
+            "warned": 1,
+            "failed": 0,
+            "finished": 4,
+            "initialized": 1,
+            "consolidated": 1,
+            "canceled": 0,
+            "terminated": 1,
+        },
+    ]
+}
+
+
+def test_parse_progress_decodes_hyphenated_key():
+    prog = parse_progress(PROGRESS_SAMPLE)
+
+    assert isinstance(prog, ProgressNodes)
+    assert [n.name for n in prog.nodes_status] == ["Theory.thy", "Other.thy"]
+
+
+def test_node_status_derived_metrics():
+    prog = parse_progress(PROGRESS_SAMPLE)
+    theory, other = prog.nodes_status
+
+    # Theory.thy: total = 2+1+0+0+7 = 10; done = finished+warned+failed = 7.
+    assert theory.total == 10
+    assert theory.percentage == 70
+    assert theory.is_finished is False
+
+    # Other.thy: nothing pending, all done.
+    assert other.total == 5
+    assert other.percentage == 100
+    assert other.is_finished is True
+
+
+def test_node_status_empty_node():
+    node = NodeStatus(name="Empty.thy")
+    assert node.total == 0
+    assert node.percentage == 0
+    assert node.is_finished is True
+
+
+def test_progress_nodes_populate_by_field_name():
+    # The field name (not just the wire alias) is accepted.
+    prog = ProgressNodes(nodes_status=[NodeStatus(name="A.thy")])
+    assert prog.nodes_status[0].name == "A.thy"
+
+
+def test_parse_progress_defaults_and_none():
+    assert parse_progress(None) is None
+    # `nodes-status` is optional; counters default to 0.
+    prog = parse_progress({})
+    assert prog.nodes_status == []
