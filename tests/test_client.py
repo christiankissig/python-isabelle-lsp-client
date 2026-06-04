@@ -113,6 +113,44 @@ class TestCaretUpdate:
         assert req.params["character"] == 7
 
 
+class TestLifecycle:
+    @pytest.mark.asyncio
+    async def test_close_sends_did_close(self, client, mock_lsp):
+        from lsp_client import TextDocumentDidCloseNotification
+
+        await client.close_text_document(URI)
+
+        notif = mock_lsp.send_notification.call_args[0][0]
+        assert isinstance(notif, TextDocumentDidCloseNotification)
+        assert notif.params["textDocument"]["uri"] == URI
+
+    @pytest.mark.asyncio
+    async def test_save_sends_did_save(self, client, mock_lsp):
+        await client.save_text_document(URI)
+
+        notif = mock_lsp.send_notification.call_args[0][0]
+        assert notif.method == "textDocument/didSave"
+        assert notif.params["textDocument"]["uri"] == URI
+
+    @pytest.mark.asyncio
+    async def test_shutdown_sends_shutdown_request(self, client, mock_lsp):
+        from lsp_client import ShutdownRequest
+
+        await client.shutdown()
+
+        req = mock_lsp.send_request.call_args[0][0]
+        assert isinstance(req, ShutdownRequest)
+
+    @pytest.mark.asyncio
+    async def test_exit_sends_exit_notification(self, client, mock_lsp):
+        from lsp_client import ExitNotification
+
+        await client.exit()
+
+        notif = mock_lsp.send_notification.call_args[0][0]
+        assert isinstance(notif, ExitNotification)
+
+
 class TestWorkDoneProgress:
     @pytest.mark.asyncio
     async def test_acknowledge_create_sends_null_result_response(

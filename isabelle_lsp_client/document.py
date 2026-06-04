@@ -62,6 +62,12 @@ class Document:
             self.uri, self.caret_position[0], self.caret_position[1]
         )
 
+    async def close_file(self) -> None:
+        """
+        Notify Isabelle that this document is closed (``textDocument/didClose``).
+        """
+        await self.isabelle.close_text_document(self.uri)
+
     def write_file(self) -> None:
         """
         Writes the file to disk. Uses output_suffix set at construction time:

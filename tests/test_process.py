@@ -6,6 +6,80 @@ import pytest
 from isabelle_lsp_client import ClientHandler, IsabelleProcess
 
 
+def _mock_document(uri, calls):
+    doc = MagicMock()
+    doc.uri = uri
+    doc.close_file = AsyncMock(side_effect=lambda: calls.append(f"close:{uri}"))
+    return doc
+
+
+class TestGracefulShutdown:
+    @pytest.fixture
+    def process(self):
+        return IsabelleProcess(ClientHandler())
+
+    def _isa_client(self, calls):
+        isa = MagicMock()
+        isa.shutdown = AsyncMock(side_effect=lambda: calls.append("shutdown"))
+        isa.exit = AsyncMock(side_effect=lambda: calls.append("exit"))
+        return isa
+
+    @pytest.mark.asyncio
+    async def test_closes_documents_then_shutdown_then_exit(self, process):
+        calls = []
+        process.isaClient = self._isa_client(calls)
+        process.clientHandler.add_document(_mock_document("file:///B.thy", calls))
+        process.clientHandler.set_document(_mock_document("file:///A.thy", calls))
+
+        await process._graceful_lsp_shutdown()
+
+        # Documents are closed first, then the shutdown/exit handshake in order.
+        assert calls[-2:] == ["shutdown", "exit"]
+        assert set(calls[:-2]) == {"close:file:///B.thy", "close:file:///A.thy"}
+
+    @pytest.mark.asyncio
+    async def test_each_uri_closed_once(self, process):
+        calls = []
+        process.isaClient = self._isa_client(calls)
+        doc = _mock_document("file:///A.thy", calls)
+        process.clientHandler.add_document(doc)
+        process.clientHandler.set_document(doc)
+
+        await process._graceful_lsp_shutdown()
+
+        assert calls.count("close:file:///A.thy") == 1
+
+    @pytest.mark.asyncio
+    async def test_errors_are_swallowed(self, process):
+        process.isaClient = MagicMock()
+        process.isaClient.shutdown = AsyncMock(side_effect=RuntimeError("gone"))
+        process.isaClient.exit = AsyncMock()
+
+        # Must not raise even though shutdown fails.
+        await process._graceful_lsp_shutdown()
+        process.isaClient.exit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_noop_without_isa_client(self, process):
+        # No isaClient assigned (e.g. startup failed early) — must be a no-op.
+        await process._graceful_lsp_shutdown()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_process_runs_graceful_then_terminates(self, process):
+        process._graceful_lsp_shutdown = AsyncMock()
+        proc = MagicMock()
+        proc.returncode = None
+        proc.stdin = MagicMock()
+        proc.stdin.wait_closed = AsyncMock()
+        proc.wait = AsyncMock()
+        process._process = proc
+
+        await process._shutdown_process()
+
+        process._graceful_lsp_shutdown.assert_awaited_once()
+        proc.terminate.assert_called_once()
+
+
 class TestIsabelleProcessTimeout:
     """Test suite for IsabelleProcess timeout handling in read_loop."""
 

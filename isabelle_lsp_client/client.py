@@ -11,12 +11,16 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from lsp_client import (
+    BaseNotification,
     ClientCapabilities,
     ClientInfo,
+    ExitNotification,
     InitializedNotification,
     InitializeParams,
     InitializeRequest,
     LSPClient,
+    ShutdownRequest,
+    TextDocumentDidCloseNotification,
     TextDocumentDidOpenNotification,
     TextDocumentItem,
 )
@@ -108,6 +112,32 @@ class IsabelleClient(object):
             params={"textDocument": text_document_item.model_dump()}
         )
         await self.lspClient.send_notification(notification)
+
+    async def close_text_document(self, uri: str) -> None:
+        """Notify Isabelle that ``uri`` is closed (``textDocument/didClose``)."""
+        notification = TextDocumentDidCloseNotification(
+            params={"textDocument": {"uri": uri}}
+        )
+        await self.lspClient.send_notification(notification)
+
+    async def save_text_document(self, uri: str) -> None:
+        """Notify Isabelle that ``uri`` was saved (``textDocument/didSave``)."""
+        notification = BaseNotification(
+            method="textDocument/didSave", params={"textDocument": {"uri": uri}}
+        )
+        await self.lspClient.send_notification(notification)
+
+    async def shutdown(self) -> None:
+        """
+        Send the LSP ``shutdown`` request. Best-effort during teardown: the
+        response is not awaited, since the read loop is typically already
+        stopping.
+        """
+        await self.lspClient.send_request(ShutdownRequest())
+
+    async def exit(self) -> None:
+        """Send the LSP ``exit`` notification, asking the server to terminate."""
+        await self.lspClient.send_notification(ExitNotification())
 
     async def caret_update(self, uri: str, line: int, character: int) -> None:
         logger.info(f"Sending caret update request: {uri}, {line}, {character}")
