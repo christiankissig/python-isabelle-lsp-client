@@ -59,6 +59,11 @@ from .version import version
 
 logger = logging.getLogger(__name__)
 
+# Default timeout (seconds) for awaited language-feature requests, so a request
+# Isabelle never answers (e.g. textDocument/documentSymbol) fails fast instead of
+# hanging the caller.
+DEFAULT_LANGUAGE_TIMEOUT = 30.0
+
 
 class IsabelleClient(object):
     """
@@ -177,6 +182,12 @@ class IsabelleClient(object):
     # the single read loop processes one message at a time, so awaiting a
     # response from inside a callback would prevent that response from ever being
     # read.
+    #
+    # Each takes a ``timeout`` (seconds): Isabelle does not answer every request
+    # — notably ``textDocument/documentSymbol`` is not implemented by its
+    # ``vscode_server`` and never replies — so an unbounded wait would hang the
+    # caller. On timeout ``asyncio.TimeoutError`` is raised (and the request is
+    # cancelled). Pass ``timeout=None`` to wait indefinitely.
 
     def _position_params(
         self, uri: str, line: int, character: int
@@ -186,33 +197,56 @@ class IsabelleClient(object):
             position=Position(line=line, character=character),
         )
 
-    async def hover(self, uri: str, line: int, character: int) -> Hover | None:
+    async def hover(
+        self,
+        uri: str,
+        line: int,
+        character: int,
+        timeout: float | None = DEFAULT_LANGUAGE_TIMEOUT,
+    ) -> Hover | None:
         """Request ``textDocument/hover`` at a position; ``None`` if no hover."""
         result = await self.lspClient.request(
-            HoverRequest(params=self._position_params(uri, line, character))
+            HoverRequest(params=self._position_params(uri, line, character)),
+            timeout=timeout,
         )
         return parse_hover_result(result)
 
     async def definition(
-        self, uri: str, line: int, character: int
+        self,
+        uri: str,
+        line: int,
+        character: int,
+        timeout: float | None = DEFAULT_LANGUAGE_TIMEOUT,
     ) -> list[Location] | list[LocationLink] | None:
         """Request ``textDocument/definition`` at a position."""
         result = await self.lspClient.request(
-            DefinitionRequest(params=self._position_params(uri, line, character))
+            DefinitionRequest(params=self._position_params(uri, line, character)),
+            timeout=timeout,
         )
         return parse_definition_result(result)
 
     async def document_highlight(
-        self, uri: str, line: int, character: int
+        self,
+        uri: str,
+        line: int,
+        character: int,
+        timeout: float | None = DEFAULT_LANGUAGE_TIMEOUT,
     ) -> list[DocumentHighlight] | None:
         """Request ``textDocument/documentHighlight`` at a position."""
         result = await self.lspClient.request(
-            DocumentHighlightRequest(params=self._position_params(uri, line, character))
+            DocumentHighlightRequest(
+                params=self._position_params(uri, line, character)
+            ),
+            timeout=timeout,
         )
         return parse_document_highlight_result(result)
 
     async def completion(
-        self, uri: str, line: int, character: int
+        self,
+        uri: str,
+        line: int,
+        character: int,
+        timeout: float | None = DEFAULT_LANGUAGE_TIMEOUT,
     ) -> CompletionList | None:
         """
         Request ``textDocument/completion`` at a position. A bare item array is
@@ -222,15 +256,24 @@ class IsabelleClient(object):
             textDocument=TextDocumentIdentifier(uri=uri),
             position=Position(line=line, character=character),
         )
-        result = await self.lspClient.request(CompletionRequest(params=params))
+        result = await self.lspClient.request(
+            CompletionRequest(params=params), timeout=timeout
+        )
         return parse_completion_result(result)
 
     async def document_symbol(
-        self, uri: str
+        self, uri: str, timeout: float | None = DEFAULT_LANGUAGE_TIMEOUT
     ) -> list[DocumentSymbol] | list[SymbolInformation] | None:
-        """Request ``textDocument/documentSymbol`` for a document (theory outline)."""
+        """
+        Request ``textDocument/documentSymbol`` for a document (theory outline).
+
+        Note: Isabelle's ``vscode_server`` does not currently answer this
+        request, so it will raise ``asyncio.TimeoutError`` after ``timeout``.
+        """
         params = DocumentSymbolParams(textDocument=TextDocumentIdentifier(uri=uri))
-        result = await self.lspClient.request(DocumentSymbolRequest(params=params))
+        result = await self.lspClient.request(
+            DocumentSymbolRequest(params=params), timeout=timeout
+        )
         return parse_document_symbol_result(result)
 
     async def acknowledge_work_done_progress_create(self, request_id: int) -> None:
