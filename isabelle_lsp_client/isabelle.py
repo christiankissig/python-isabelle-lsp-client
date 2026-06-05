@@ -1,6 +1,36 @@
+import functools
+import json
 import re
+from importlib import resources
 
 from .document import Document
+
+# Isabelle symbol notation token, e.g. ``\<Rightarrow>`` or ``\<^sub>``.
+_ISABELLE_SYMBOL = re.compile(r"\\<[^>\s]+>")
+
+
+@functools.lru_cache(maxsize=1)
+def _symbol_table() -> dict[str, str]:
+    """Load the bundled Isabelle symbol table (token -> Unicode character)."""
+    raw = (
+        resources.files("isabelle_lsp_client.data")
+        .joinpath("symbols.json")
+        .read_text(encoding="utf-8")
+    )
+    return {token: chr(code) for token, code in json.loads(raw).items()}
+
+
+def decode_symbols(text: str) -> str:
+    """
+    Decode Isabelle symbol notation in ``text`` to Unicode.
+
+    Replaces ``\\<name>`` tokens (e.g. ``\\<Rightarrow>``) with the corresponding
+    Unicode character (``⇒``) from the bundled symbol table. Tokens not in the
+    table are left unchanged. Useful on text Isabelle surfaces with raw notation
+    — hover contents, ``PIDE/dynamic_output`` proof state, decoration content.
+    """
+    table = _symbol_table()
+    return _ISABELLE_SYMBOL.sub(lambda m: table.get(m.group(0), m.group(0)), text)
 
 
 def get_command_from_sledgehammer(content: str) -> str | None:
