@@ -259,6 +259,20 @@ class TestLanguageFeatures:
         assert isinstance(result[0], DocumentHighlight)
         assert isinstance(mock_lsp.request.call_args[0][0], DocumentHighlightRequest)
 
+    @pytest.mark.asyncio
+    async def test_default_timeout_is_forwarded(self, client, mock_lsp):
+        from isabelle_lsp_client.client import DEFAULT_LANGUAGE_TIMEOUT
+
+        mock_lsp.request.return_value = None
+        await client.hover(URI, 0, 0)
+        assert mock_lsp.request.call_args.kwargs["timeout"] == DEFAULT_LANGUAGE_TIMEOUT
+
+    @pytest.mark.asyncio
+    async def test_explicit_timeout_is_forwarded(self, client, mock_lsp):
+        mock_lsp.request.return_value = None
+        await client.document_symbol(URI, timeout=5)
+        assert mock_lsp.request.call_args.kwargs["timeout"] == 5
+
 
 class TestWorkDoneProgress:
     @pytest.mark.asyncio
