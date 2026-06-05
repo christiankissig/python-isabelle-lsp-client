@@ -1,10 +1,37 @@
 from isabelle_lsp_client.isabelle import (
     command_finishes_subgoal,
+    decode_symbols,
     get_command_from_sledgehammer,
     is_isabelle_ready,
     is_sledgehammer_done,
     is_sledgehammer_noproof,
 )
+
+
+class TestDecodeSymbols:
+    def test_decodes_common_symbols(self):
+        assert decode_symbols("\\<forall>x. P x") == "∀x. P x"
+        assert decode_symbols("\\<lambda>x. x") == "λx. x"
+
+    def test_decodes_real_hover_string(self):
+        # Captured from a live `textDocument/hover` over `+`.
+        assert decode_symbols(":: nat \\<Rightarrow> nat \\<Rightarrow> nat") == (
+            ":: nat ⇒ nat ⇒ nat"
+        )
+
+    def test_leaves_unknown_tokens_unchanged(self):
+        assert decode_symbols("\\<not_a_real_symbol>") == "\\<not_a_real_symbol>"
+
+    def test_decodes_adjacent_tokens(self):
+        assert decode_symbols("\\<and>\\<or>") == "∧∨"
+
+    def test_plain_text_unchanged(self):
+        assert decode_symbols("lemma foo: x = y") == "lemma foo: x = y"
+        assert decode_symbols("") == ""
+
+    def test_idempotent_on_decoded_text(self):
+        once = decode_symbols("\\<forall>\\<epsilon>")
+        assert decode_symbols(once) == once
 
 
 class TestIsIsabelleReady:

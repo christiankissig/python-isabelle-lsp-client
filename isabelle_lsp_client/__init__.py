@@ -21,6 +21,7 @@ from isabelle_lsp_client.handler import (
 )
 from isabelle_lsp_client.isabelle import (
     command_finishes_subgoal,
+    decode_symbols,
     get_command_from_document,
     get_command_from_sledgehammer,
     is_isabelle_ready,
@@ -100,6 +101,7 @@ __all__ = [
     "WORKSPACE_APPLYEDIT",
     "WorkspaceEdit",
     "command_finishes_subgoal",
+    "decode_symbols",
     "get_command_from_document",
     "get_command_from_sledgehammer",
     "is_isabelle_ready",
