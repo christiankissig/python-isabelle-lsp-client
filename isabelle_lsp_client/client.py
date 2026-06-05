@@ -14,15 +14,37 @@ from lsp_client import (
     BaseNotification,
     ClientCapabilities,
     ClientInfo,
+    CompletionList,
+    CompletionParams,
+    CompletionRequest,
+    DefinitionRequest,
+    DocumentHighlight,
+    DocumentHighlightRequest,
+    DocumentSymbol,
+    DocumentSymbolParams,
+    DocumentSymbolRequest,
     ExitNotification,
+    Hover,
+    HoverRequest,
     InitializedNotification,
     InitializeParams,
     InitializeRequest,
+    Location,
+    LocationLink,
     LSPClient,
+    Position,
     ShutdownRequest,
+    SymbolInformation,
     TextDocumentDidCloseNotification,
     TextDocumentDidOpenNotification,
+    TextDocumentIdentifier,
     TextDocumentItem,
+    TextDocumentPositionParams,
+    parse_completion_result,
+    parse_definition_result,
+    parse_document_highlight_result,
+    parse_document_symbol_result,
+    parse_hover_result,
 )
 
 from isabelle_lsp_client.protocol import (
@@ -145,6 +167,71 @@ class IsabelleClient(object):
 
     async def progress_request(self) -> None:
         await self.lspClient.send_notification(ProgressRequest())
+
+    # Language features
+    #
+    # These send a request and *await* its result (correlated by id in the
+    # LSPClient). They must therefore be called from the write/command side —
+    # e.g. an ``on_start`` callback or a command coroutine — and NOT from within
+    # a read-loop callback (``PIDE/dynamic_output``, ``PIDE/decoration``, ...):
+    # the single read loop processes one message at a time, so awaiting a
+    # response from inside a callback would prevent that response from ever being
+    # read.
+
+    def _position_params(
+        self, uri: str, line: int, character: int
+    ) -> TextDocumentPositionParams:
+        return TextDocumentPositionParams(
+            textDocument=TextDocumentIdentifier(uri=uri),
+            position=Position(line=line, character=character),
+        )
+
+    async def hover(self, uri: str, line: int, character: int) -> Hover | None:
+        """Request ``textDocument/hover`` at a position; ``None`` if no hover."""
+        result = await self.lspClient.request(
+            HoverRequest(params=self._position_params(uri, line, character))
+        )
+        return parse_hover_result(result)
+
+    async def definition(
+        self, uri: str, line: int, character: int
+    ) -> list[Location] | list[LocationLink] | None:
+        """Request ``textDocument/definition`` at a position."""
+        result = await self.lspClient.request(
+            DefinitionRequest(params=self._position_params(uri, line, character))
+        )
+        return parse_definition_result(result)
+
+    async def document_highlight(
+        self, uri: str, line: int, character: int
+    ) -> list[DocumentHighlight] | None:
+        """Request ``textDocument/documentHighlight`` at a position."""
+        result = await self.lspClient.request(
+            DocumentHighlightRequest(params=self._position_params(uri, line, character))
+        )
+        return parse_document_highlight_result(result)
+
+    async def completion(
+        self, uri: str, line: int, character: int
+    ) -> CompletionList | None:
+        """
+        Request ``textDocument/completion`` at a position. A bare item array is
+        normalised to a :class:`CompletionList`.
+        """
+        params = CompletionParams(
+            textDocument=TextDocumentIdentifier(uri=uri),
+            position=Position(line=line, character=character),
+        )
+        result = await self.lspClient.request(CompletionRequest(params=params))
+        return parse_completion_result(result)
+
+    async def document_symbol(
+        self, uri: str
+    ) -> list[DocumentSymbol] | list[SymbolInformation] | None:
+        """Request ``textDocument/documentSymbol`` for a document (theory outline)."""
+        params = DocumentSymbolParams(textDocument=TextDocumentIdentifier(uri=uri))
+        result = await self.lspClient.request(DocumentSymbolRequest(params=params))
+        return parse_document_symbol_result(result)
 
     async def acknowledge_work_done_progress_create(self, request_id: int) -> None:
         """

@@ -663,7 +663,7 @@ pydantic = ">=2.9.0,<3.0.0"
 type = "git"
 url = "https://github.com/christiankissig/python-lsp-client.git"
 reference = "HEAD"
-resolved_reference = "634421c4f7477b57b9e67c272d87eefea6a90d26"
+resolved_reference = "e06b3997bf2e616ba9c5578b5d25cae6a0d63303"
 
 [[package]]
 name = "markdown-it-py"
